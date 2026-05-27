@@ -83,9 +83,13 @@ def save_data(df):
     if ws:
         try:
             ws.clear()
-            ws.update([df.columns.tolist()] + df.values.tolist())
+            # Memastikan semua data diubah ke format string/list agar gspread menerimanya dengan aman
+            isi_data = [df.columns.tolist()] + df.astype(str).values.tolist()
+            ws.update(isi_data)
             return
-        except: pass
+        except Exception as e:
+            # Anda bisa melihat error di log Streamlit Cloud jika ini gagal
+            st.sidebar.error(f"Gagal simpan ke Sheets: {e}") 
     df.to_csv("data_situntas.csv", index=False)
 
 @st.cache_data(ttl=30)
