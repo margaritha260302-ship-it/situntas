@@ -1,0 +1,6 @@
+data_situntas.csv
+users_situntas.csv
+.streamlit/secrets.toml
+*.pyc
+__pycache__/
+.env
