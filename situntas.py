@@ -13,19 +13,19 @@ st.set_page_config(
 )
 
 WILAYAH = {
-    "Kelurahan Kota SoE": ["Posyandu Mawar I", "Posyandu Mawar II", "Posyandu Mawar III"],
-    "Kelurahan Karang Siri": ["Posyandu Melati I", "Posyandu Melati II", "Posyandu Melati III"],
-    "Kelurahan Benpasi": ["Posyandu Anggrek I", "Posyandu Anggrek II", "Posyandu Anggrek III"],
-    "Kelurahan Nonohonis": ["Posyandu Kenanga I", "Posyandu Kenanga II", "Posyandu Kenanga III"],
-    "Kelurahan Baumata Barat": ["Posyandu Dahlia I", "Posyandu Dahlia II", "Posyandu Dahlia III"],
-    "Kelurahan Soe": ["Posyandu Bougenville I", "Posyandu Bougenville II", "Posyandu Bougenville III"],
-    "Kelurahan Kesetnana": ["Posyandu Flamboyan I", "Posyandu Flamboyan II", "Posyandu Flamboyan III"],
-    "Kelurahan Noemuti": ["Posyandu Cempaka I", "Posyandu Cempaka II", "Posyandu Cempaka III"],
-    "Kelurahan Oelami": ["Posyandu Tulip I", "Posyandu Tulip II", "Posyandu Tulip III"],
-    "Kelurahan Karang Anyar": ["Posyandu Aster I", "Posyandu Aster II", "Posyandu Aster III"],
-    "Kelurahan Nunmafo": ["Posyandu Seruni I", "Posyandu Seruni II", "Posyandu Seruni III"],
-    "Desa Oelbubuk": ["Posyandu Nusa I", "Posyandu Nusa II", "Posyandu Nusa III"],
-    "Desa Nulle": ["Posyandu Indah I", "Posyandu Indah II", "Posyandu Indah III"],
+    "Kelurahan Cendana": ["Posyandu Cendana I", "Posyandu Cendana II", "Posyandu Cendana III", "Posyandu Cendana IV"],
+    "Kelurahan SoE": ["Posyandu SoE I", "Posyandu SoE II"],
+    "Kelurahan Karangsiri": ["Posyandu Karangsiri I", "Posyandu Karangsiri II", "Posyandu Karangsiri III", "Posyandu Karangsiri IV"],
+    "Kelurahan Nonohonis": ["Posyandu Nonohonis I", "Posyandu Nonohonis II", "Posyandu Nonohonis III"],
+    "Kelurahan Kota Baru": ["Posyandu Kota Baru I", "Posyandu Kota Baru II"],
+    "Kelurahan Kampung Baru": ["Posyandu Kampung Baru I", "Posyandu Kampung Baru II"],
+    "Kelurahan Taubneno": ["Posyandu Taubneno I"],
+    "Kelurahan Oekefan": ["Posyandu Oekefan I", "Posyandu Oekefan II"],
+    "Kelurahan Oebesa": ["Posyandu Oebesa I", "Posyandu Oebesa II", "Posyandu Oebesa III"],
+    "Kelurahan Nunumeu": ["Posyandu Nunumeu I", "Posyandu Nunumeu II", "Posyandu Nunumeu III"],
+    "Kelurahan Kobekamusa": ["Posyandu Kobekamusa I", "Posyandu Kobekamusa II"],
+    "Desa Noemeto": ["Posyandu Noemeto I", "Posyandu Noemeto II", "Posyandu Noemeto III"],
+    "Desa Kuatae": ["Posyandu Kuatae I", "Posyandu Kuatae II"],
 }
 BULAN_LIST = ["Januari","Februari","Maret","April","Mei","Juni",
               "Juli","Agustus","September","Oktober","November","Desember"]
