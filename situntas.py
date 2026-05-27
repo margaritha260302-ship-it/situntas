@@ -85,13 +85,13 @@ def save_data(df):
     ws, err = get_sheet("data_stunting")
     if ws:
         try:
-            data_to_write = [df.columns.tolist()] + df.astype(str).values.tolist()
+            all_data = [df.columns.tolist()] + df.astype(str).values.tolist()
             ws.clear()
-            ws.update(data_to_write)
+            ws.update(all_data)
             return True, "OK"
         except Exception as e:
             return False, str(e)
-    return False, "Tidak bisa konek ke sheet data_stunting: " + str(err)
+    return False, "Tidak bisa konek: " + str(err)
 
 @st.cache_data(ttl=30)
 def load_users():
@@ -490,7 +490,10 @@ def page_input(df, user):
         elif hadir_in > sasaran_in:
             st.error("Kehadiran tidak boleh melebihi sasaran.")
         else:
-            cek = df[(df["tahun"]==tahun_in)&(df["bulan"]==bulan_in)&(df["posyandu"]==posyandu_in)] if not df.empty else pd.DataFrame()
+            # Selalu ambil data terbaru dari Sheets sebelum simpan
+            load_data.clear()
+            df_fresh = load_data()
+            cek = df_fresh[(df_fresh["tahun"]==tahun_in)&(df_fresh["bulan"]==bulan_in)&(df_fresh["posyandu"]==posyandu_in)] if not df_fresh.empty else pd.DataFrame()
             if not cek.empty:
                 st.warning("Data " + posyandu_in + " — " + bulan_in + " " + str(tahun_in) + " sudah ada.")
             else:
@@ -498,13 +501,12 @@ def page_input(df, user):
                            "wilayah":wilayah_in,"posyandu":posyandu_in,"sasaran":sasaran_in,
                            "hadir":hadir_in,"stunting":stunting_in,"diinput_oleh":user["username"],
                            "waktu_input":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                ok, msg = save_data(df)
+                df_fresh = pd.concat([df_fresh, pd.DataFrame([new_row])], ignore_index=True)
+                ok, msg = save_data(df_fresh)
                 if ok:
                     st.success("Data " + posyandu_in + " — " + bulan_in + " " + str(tahun_in) + " berhasil disimpan!")
                 else:
                     st.error("GAGAL simpan ke Google Sheets: " + msg)
-                    st.info("Data tersimpan sementara di memori sesi ini.")
                 st.rerun()
 
     st.markdown("<div class='section-title'><span>|</span> Data Terbaru</div>", unsafe_allow_html=True)
