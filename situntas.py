@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import os, io, hashlib, base64, json
+import os, io, hashlib, base64
 from datetime import datetime
 
 st.set_page_config(
@@ -12,67 +12,71 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ─── DATA WILAYAH & POSYANDU ────────────────────────────────────────────────────
 WILAYAH = {
-    "Kelurahan Cendana": ["Posyandu Cendana I", "Posyandu Cendana II", "Posyandu Cendana III", "Posyandu Cendana IV"],
-    "Kelurahan SoE": ["Posyandu SoE I", "Posyandu SoE II"],
-    "Kelurahan Karangsiri": ["Posyandu Karangsiri I", "Posyandu Karangsiri II", "Posyandu Karangsiri III", "Posyandu Karangsiri IV"],
-    "Kelurahan Nonohonis": ["Posyandu Nonohonis I", "Posyandu Nonohonis II", "Posyandu Nonohonis III"],
-    "Kelurahan Kota Baru": ["Posyandu Kota Baru I", "Posyandu Kota Baru II"],
-    "Kelurahan Kampung Baru": ["Posyandu Kampung Baru I", "Posyandu Kampung Baru II"],
-    "Kelurahan Taubneno": ["Posyandu Taubneno I"],
-    "Kelurahan Oekefan": ["Posyandu Oekefan I", "Posyandu Oekefan II"],
-    "Kelurahan Oebesa": ["Posyandu Oebesa I", "Posyandu Oebesa II", "Posyandu Oebesa III"],
-    "Kelurahan Nunumeu": ["Posyandu Nunumeu I", "Posyandu Nunumeu II", "Posyandu Nunumeu III"],
-    "Kelurahan Kobekamusa": ["Posyandu Kobekamusa I", "Posyandu Kobekamusa II"],
-    "Desa Noemeto": ["Posyandu Noemeto I", "Posyandu Noemeto II", "Posyandu Noemeto III"],
-    "Desa Kuatae": ["Posyandu Kuatae I", "Posyandu Kuatae II"],
+    "Kelurahan Cendana":    ["Posyandu Cendana I","Posyandu Cendana II","Posyandu Cendana III","Posyandu Cendana IV"],
+    "Kelurahan SoE":        ["Posyandu SoE I","Posyandu SoE II"],
+    "Kelurahan Karangsiri": ["Posyandu Karangsiri I","Posyandu Karangsiri II","Posyandu Karangsiri III","Posyandu Karangsiri IV"],
+    "Kelurahan Nonohonis":  ["Posyandu Nonohonis I","Posyandu Nonohonis II","Posyandu Nonohonis III"],
+    "Kelurahan Kota Baru":  ["Posyandu Kota Baru I","Posyandu Kota Baru II"],
+    "Kelurahan Kampung Baru":["Posyandu Kampung Baru I","Posyandu Kampung Baru II"],
+    "Kelurahan Taubneno":   ["Posyandu Taubneno I"],
+    "Kelurahan Oekefan":    ["Posyandu Oekefan I","Posyandu Oekefan II"],
+    "Kelurahan Oebesa":     ["Posyandu Oebesa I","Posyandu Oebesa II","Posyandu Oebesa III"],
+    "Kelurahan Nunumeu":    ["Posyandu Nunumeu I","Posyandu Nunumeu II","Posyandu Nunumeu III"],
+    "Kelurahan Kobekamusa": ["Posyandu Kobekamusa I","Posyandu Kobekamusa II"],
+    "Desa Noemeto":         ["Posyandu Noemeto I","Posyandu Noemeto II","Posyandu Noemeto III"],
+    "Desa Kuatae":          ["Posyandu Kuatae I","Posyandu Kuatae II"],
 }
 BULAN_LIST = ["Januari","Februari","Maret","April","Mei","Juni",
               "Juli","Agustus","September","Oktober","November","Desember"]
 TAHUN_LIST = [2024, 2025, 2026, 2027]
-LOGO_PATH = "logo_situntas.png"
+LOGO_PATH  = "logo_situntas.png"
 
-def get_bulan_ke(b): return BULAN_LIST.index(b) + 1
-def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
+def get_bulan_ke(b):
+    try:    return BULAN_LIST.index(b) + 1
+    except: return 0
 
-# ─── GOOGLE SHEETS CONNECTION ──────────────────────────────────────────────────
-def get_gsheet_client():
-    """Tidak pakai cache supaya koneksi selalu fresh"""
+def hash_pw(p):
+    return hashlib.sha256(p.encode()).hexdigest()
+
+# ─── GOOGLE SHEETS ──────────────────────────────────────────────────────────────
+def get_gc():
     try:
         import gspread
         from google.oauth2.service_account import Credentials
-        scopes = ["https://spreadsheets.google.com/feeds",
-                  "https://www.googleapis.com/auth/drive"]
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        client = gspread.authorize(creds)
-        return client, None
+        info = dict(st.secrets["gcp_service_account"])
+        info["private_key"] = info["private_key"].replace("\\n", "\n")
+        creds = Credentials.from_service_account_info(info, scopes=[
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ])
+        return gspread.authorize(creds), None
     except Exception as e:
         return None, str(e)
 
-def get_sheet(name):
+def get_ws(tab):
     try:
-        gc, err = get_gsheet_client()
-        if gc is None:
-            return None, "Gagal konek: " + str(err)
-        sheet_name = st.secrets["sheet_name"]
-        sh = gc.open(sheet_name)
-        ws = sh.worksheet(name)
-        return ws, None
+        gc, err = get_gc()
+        if gc is None: return None, err
+        sh = gc.open(st.secrets.get("sheet_name","Data Stunting SITUNTAS Kota SoE"))
+        return sh.worksheet(tab), None
     except Exception as e:
         return None, str(e)
 
-# ─── DATA FUNCTIONS ────────────────────────────────────────────────────────────
 @st.cache_data(ttl=30)
 def load_data():
-    ws, err = get_sheet("data_stunting")
+    ws, err = get_ws("data_stunting")
     if ws:
         try:
             records = ws.get_all_records()
             if records:
                 df = pd.DataFrame(records)
-                if "bulan_ke" not in df.columns:
-                    df["bulan_ke"] = df["bulan"].apply(lambda x: get_bulan_ke(x) if x in BULAN_LIST else 0)
+                df["tahun"]    = pd.to_numeric(df["tahun"],    errors="coerce")
+                df["sasaran"]  = pd.to_numeric(df["sasaran"],  errors="coerce").fillna(0).astype(int)
+                df["hadir"]    = pd.to_numeric(df["hadir"],    errors="coerce").fillna(0).astype(int)
+                df["stunting"] = pd.to_numeric(df["stunting"], errors="coerce").fillna(0).astype(int)
+                df["bulan_ke"] = df["bulan"].apply(get_bulan_ke)
                 return df
         except: pass
     if os.path.exists("data_situntas.csv"):
@@ -82,36 +86,39 @@ def load_data():
 
 def save_data(df):
     load_data.clear()
-    ws, err = get_sheet("data_stunting")
+    ws, err = get_ws("data_stunting")
     if ws:
         try:
-            all_data = [df.columns.tolist()] + df.astype(str).values.tolist()
             ws.clear()
-            ws.update(all_data)
+            ws.update([df.columns.tolist()] + df.astype(str).values.tolist())
             return True, "OK"
         except Exception as e:
             return False, str(e)
-    return False, "Tidak bisa konek: " + str(err)
+    return False, str(err)
 
 @st.cache_data(ttl=30)
 def load_users():
-    ws, err = get_sheet("users")
+    ws, err = get_ws("users")
     if ws:
         try:
             records = ws.get_all_records()
-            if records: return pd.DataFrame(records)
+            if records:
+                df = pd.DataFrame(records)
+                df.columns = [c.lower().strip() for c in df.columns]
+                return df
         except: pass
     if os.path.exists("users_situntas.csv"):
         return pd.read_csv("users_situntas.csv")
-    df = pd.DataFrame([
-        {"username":"admin","password":hash_pw("situntas2025"),"nama":"Administrator","role":"admin","wilayah":"semua","aktif":True},
-    ])
+    df = pd.DataFrame([{
+        "username":"admin","password":hash_pw("situntas2025"),
+        "nama":"Administrator","role":"admin","wilayah":"semua","aktif":"TRUE"
+    }])
     save_users(df)
     return df
 
 def save_users(df):
     load_users.clear()
-    ws, err = get_sheet("users")
+    ws, err = get_ws("users")
     if ws:
         try:
             ws.clear()
@@ -123,660 +130,905 @@ def save_users(df):
 
 def verify_user(username, password):
     users = load_users()
-    # aktif bisa berupa bool True atau string "TRUE" / "True" dari Google Sheets
-    users["_aktif"] = users["aktif"].astype(str).str.upper().isin(["TRUE","1","YES"])
-    user = users[(users["username"]==username) & (users["_aktif"]==True)]
-    if user.empty: return None
-    if str(user.iloc[0]["password"]) == hash_pw(password):
-        return user.iloc[0].to_dict()
+    users["_ok"] = users["aktif"].astype(str).str.upper().isin(["TRUE","1","YES"])
+    row = users[(users["username"]==username) & (users["_ok"]==True)]
+    if row.empty: return None
+    if str(row.iloc[0]["password"]) == hash_pw(password):
+        return row.iloc[0].to_dict()
     return None
 
-# ─── CSS ───────────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Nunito:wght@700;800;900&display=swap');
-* { font-family: 'Plus Jakarta Sans', sans-serif; }
-.stApp { background: linear-gradient(160deg, #E8F4FD 0%, #C8E6FA 40%, #D6EEFB 70%, #EBF5FD 100%); min-height:100vh; }
-[data-testid="stSidebar"] { background: linear-gradient(180deg, #1565C0 0%, #1976D2 50%, #1E88E5 100%) !important; }
-[data-testid="stSidebar"] * { color: #FFFFFF !important; }
-[data-testid="stSidebar"] .stRadio label { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:10px 14px; margin:3px 0; display:block; }
-[data-testid="stSidebar"] .stRadio label:hover { background:rgba(255,255,255,0.18); }
-.situntas-header { background:linear-gradient(135deg,#1565C0,#1976D2,#42A5F5); border-radius:20px; padding:1.8rem 2.5rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:1.5rem; box-shadow:0 8px 32px rgba(21,101,192,0.25); }
-.header-badge { display:inline-block; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.35); color:#FFFFFF; font-size:0.7rem; font-weight:700; letter-spacing:2px; text-transform:uppercase; padding:3px 12px; border-radius:20px; margin-bottom:0.7rem; }
-.header-title { font-family:'Nunito',sans-serif; font-size:2rem; font-weight:900; color:#FFFFFF; margin:0; line-height:1.2; }
-.header-sub { color:rgba(255,255,255,0.85); font-size:0.88rem; margin:0.3rem 0 0; }
-.metric-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.5rem; }
-.metric-card { background:#FFFFFF; border-radius:16px; padding:1.3rem 1.5rem; position:relative; overflow:hidden; transition:transform 0.2s,box-shadow 0.2s; box-shadow:0 4px 16px rgba(21,101,192,0.1); }
-.metric-card:hover { transform:translateY(-3px); box-shadow:0 8px 28px rgba(21,101,192,0.18); }
-.metric-card::after { content:''; position:absolute; top:0; left:0; right:0; height:4px; border-radius:16px 16px 0 0; }
-.mc-red::after { background:linear-gradient(90deg,#EF5350,#E53935); }
-.mc-blue::after { background:linear-gradient(90deg,#42A5F5,#1976D2); }
-.mc-green::after { background:linear-gradient(90deg,#66BB6A,#43A047); }
-.mc-yellow::after { background:linear-gradient(90deg,#FFA726,#FB8C00); }
-.metric-icon { font-size:1.6rem; margin-bottom:0.5rem; }
-.metric-label { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#90A4AE; margin-bottom:0.3rem; }
-.metric-value { font-size:2.2rem; font-weight:800; line-height:1; color:#1A237E; }
-.metric-sub { font-size:0.78rem; color:#90A4AE; margin-top:0.3rem; }
-.metric-delta-up { color:#E53935; font-size:0.78rem; font-weight:700; }
-.metric-delta-down { color:#43A047; font-size:0.78rem; font-weight:700; }
-.section-title { color:#1565C0; font-size:1rem; font-weight:700; margin:1.5rem 0 0.8rem; padding-bottom:0.5rem; border-bottom:2px solid rgba(21,101,192,0.15); display:flex; align-items:center; gap:8px; }
-.alert-box { background:rgba(21,101,192,0.07); border:1px solid rgba(21,101,192,0.2); border-left:4px solid #1976D2; border-radius:10px; padding:0.9rem 1.2rem; color:#1565C0; font-size:0.87rem; margin-bottom:1rem; }
-.alert-warning { background:rgba(255,152,0,0.07); border-color:rgba(255,152,0,0.25); border-left-color:#FB8C00; color:#E65100; }
-.chart-container { background:#FFFFFF; border-radius:16px; padding:1.2rem; margin-bottom:1rem; box-shadow:0 4px 16px rgba(21,101,192,0.08); }
-.public-banner { background:linear-gradient(135deg,#E8F5E9,#C8E6C9); border:1px solid #A5D6A7; border-left:4px solid #43A047; border-radius:12px; padding:0.8rem 1.2rem; color:#2E7D32; font-size:0.85rem; font-weight:600; margin-bottom:1.2rem; }
-.stButton > button { background:linear-gradient(135deg,#1976D2,#1565C0) !important; border:none !important; border-radius:10px !important; color:white !important; font-weight:600 !important; box-shadow:0 4px 12px rgba(21,101,192,0.3) !important; }
-.stButton > button:hover { background:linear-gradient(135deg,#1E88E5,#1976D2) !important; transform:translateY(-1px) !important; }
-.stTextInput > div > div, .stSelectbox > div > div, .stNumberInput > div > div { background:#FFFFFF !important; border:1.5px solid #BBDEFB !important; border-radius:10px !important; }
-.sidebar-title { font-family:'Nunito',sans-serif; font-size:1.4rem; font-weight:900; color:#FFFFFF !important; letter-spacing:1px; }
-.sidebar-sub { font-size:0.68rem; color:rgba(255,255,255,0.65) !important; letter-spacing:1px; text-transform:uppercase; }
-label { color:#1565C0 !important; font-size:0.85rem !important; font-weight:600 !important; }
-p, div { color:#1A237E; }
-h1,h2,h3 { color:#1565C0 !important; }
-.stTabs [data-baseweb="tab-list"] { background:rgba(255,255,255,0.6); border-radius:10px; padding:4px; }
-.stTabs [data-baseweb="tab"] { border-radius:8px; color:#1565C0 !important; font-weight:600; }
-.stTabs [aria-selected="true"] { background:#1976D2 !important; color:white !important; }
-</style>
-""", unsafe_allow_html=True)
+# ─── SESSION STATE ──────────────────────────────────────────────────────────────
+for k, v in [("logged_in",False),("user",None),("is_public",False),
+             ("hapus_target",None),("hapus_konfirm",False)]:
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-PLOT_LAYOUT = dict(
-    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(227,242,253,0.4)',
-    font=dict(color='#1A237E', family='Plus Jakarta Sans', size=12),
-    xaxis=dict(gridcolor='rgba(21,101,192,0.08)', linecolor='rgba(21,101,192,0.15)', tickfont=dict(color='#1565C0')),
-    yaxis=dict(gridcolor='rgba(21,101,192,0.08)', linecolor='rgba(21,101,192,0.15)', tickfont=dict(color='#1565C0')),
-    margin=dict(l=20,r=20,t=40,b=20),
-    hoverlabel=dict(bgcolor='#FFFFFF', bordercolor='rgba(21,101,192,0.3)', font=dict(color='#1A237E')),
-    legend=dict(bgcolor='rgba(255,255,255,0.9)', bordercolor='rgba(21,101,192,0.2)', borderwidth=1, font=dict(color='#1A237E')),
-)
-
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.user = None
-    st.session_state.is_public = False
-
-def get_logo_b64():
+# ─── LOGO ───────────────────────────────────────────────────────────────────────
+def logo_b64():
     if os.path.exists(LOGO_PATH):
-        with open(LOGO_PATH, "rb") as f:
+        with open(LOGO_PATH,"rb") as f:
             return base64.b64encode(f.read()).decode()
     return None
 
-def render_header(subtitle=""):
-    logo_b64 = get_logo_b64()
-    logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="width:80px;height:80px;object-fit:contain;border-radius:12px;background:white;padding:6px;flex-shrink:0;">' if logo_b64 else '<div style="font-size:3rem;">&#x1F3E5;</div>'
-    subtitle_html = f'<br><span style="color:rgba(255,255,255,0.85);font-size:0.82rem;font-style:italic;">{subtitle}</span>' if subtitle else ""
-    st.markdown(f"""
-    <div class="situntas-header">
-        {logo_html}
-        <div>
-            <div class="header-badge">Sistem Informasi Digital</div>
-            <div class="header-title">SITUNTAS</div>
-            <div class="header-sub">Sistem Informasi Terpadu Monitoring Angka Stunting Secara Realtime<br>
-            Kecamatan Kota SoE — Kabupaten Timor Tengah Selatan{subtitle_html}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+# ─── CSS ────────────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Nunito:wght@700;800;900&display=swap');
+* { font-family:'Plus Jakarta Sans',sans-serif; box-sizing:border-box; }
 
+/* Background */
+.stApp { background:linear-gradient(160deg,#E8F4FD 0%,#C8E6FA 40%,#D6EEFB 70%,#EBF5FD 100%); min-height:100vh; }
+
+/* Sidebar */
+[data-testid="stSidebar"] { background:linear-gradient(180deg,#0D47A1,#1565C0,#1976D2) !important; border-right:none; box-shadow:4px 0 20px rgba(13,71,161,0.3); }
+[data-testid="stSidebar"] * { color:#FFFFFF !important; }
+[data-testid="stSidebar"] .stRadio > div > label {
+    background:rgba(255,255,255,0.07);
+    border:1px solid rgba(255,255,255,0.1);
+    border-radius:12px; padding:11px 16px; margin:4px 0;
+    display:flex; align-items:center; gap:10px;
+    transition:all 0.2s; cursor:pointer; font-weight:500;
+}
+[data-testid="stSidebar"] .stRadio > div > label:hover { background:rgba(255,255,255,0.15); border-color:rgba(255,255,255,0.25); transform:translateX(2px); }
+[data-testid="stSidebar"] .stRadio > div > label[data-checked="true"],
+[data-testid="stSidebar"] .stRadio > div > label:has(input:checked) {
+    background:rgba(255,255,255,0.22) !important;
+    border-color:rgba(255,255,255,0.4) !important;
+    font-weight:700 !important;
+}
+
+/* Header banner */
+.hdr { background:linear-gradient(135deg,#0D47A1,#1565C0,#1976D2,#42A5F5);
+       border-radius:20px; padding:1.8rem 2.5rem; margin-bottom:1.8rem;
+       display:flex; align-items:center; gap:1.5rem;
+       box-shadow:0 8px 40px rgba(13,71,161,0.3); position:relative; overflow:hidden; }
+.hdr::before { content:''; position:absolute; top:-60%; right:-5%; width:350px; height:350px;
+               background:radial-gradient(circle,rgba(255,255,255,0.12),transparent 70%); border-radius:50%; }
+.hdr::after  { content:''; position:absolute; bottom:-40%; left:10%; width:200px; height:200px;
+               background:radial-gradient(circle,rgba(66,165,245,0.2),transparent 70%); border-radius:50%; }
+.hdr-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,0.18);
+             border:1px solid rgba(255,255,255,0.3); color:#fff; font-size:0.68rem; font-weight:700;
+             letter-spacing:2px; text-transform:uppercase; padding:4px 14px; border-radius:20px; margin-bottom:0.8rem; }
+.hdr-title { font-family:'Nunito',sans-serif; font-size:2.2rem; font-weight:900; color:#fff; margin:0; line-height:1.1;
+             text-shadow:0 2px 10px rgba(0,0,0,0.15); }
+.hdr-sub { color:rgba(255,255,255,0.85); font-size:0.87rem; margin:0.4rem 0 0; line-height:1.6; }
+
+/* Metric cards */
+.mgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:1.2rem; margin-bottom:1.8rem; }
+@media(max-width:900px) { .mgrid { grid-template-columns:repeat(2,1fr); } }
+.mcard { background:#fff; border-radius:18px; padding:1.4rem 1.6rem; position:relative; overflow:hidden;
+         transition:transform 0.25s,box-shadow 0.25s;
+         box-shadow:0 4px 20px rgba(21,101,192,0.1); }
+.mcard:hover { transform:translateY(-4px); box-shadow:0 12px 35px rgba(21,101,192,0.2); }
+.mcard::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; border-radius:18px 18px 0 0; }
+.mc-r::before { background:linear-gradient(90deg,#EF5350,#E53935,#C62828); }
+.mc-b::before { background:linear-gradient(90deg,#42A5F5,#1976D2,#0D47A1); }
+.mc-g::before { background:linear-gradient(90deg,#66BB6A,#43A047,#2E7D32); }
+.mc-y::before { background:linear-gradient(90deg,#FFA726,#FB8C00,#E65100); }
+.micon  { font-size:1.8rem; margin-bottom:0.6rem; }
+.mlabel { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:#90A4AE; margin-bottom:0.4rem; }
+.mval   { font-size:2.4rem; font-weight:900; line-height:1; color:#0D47A1; letter-spacing:-1px; }
+.msub   { font-size:0.78rem; color:#90A4AE; margin-top:0.4rem; line-height:1.4; }
+.dup    { color:#E53935; font-size:0.78rem; font-weight:700; }
+.ddown  { color:#43A047; font-size:0.78rem; font-weight:700; }
+
+/* Section title */
+.sec { color:#1565C0; font-size:1rem; font-weight:700; margin:1.8rem 0 1rem;
+       padding-bottom:0.6rem; border-bottom:2px solid rgba(21,101,192,0.12);
+       display:flex; align-items:center; gap:8px; }
+.sec-bar { width:4px; height:18px; background:linear-gradient(180deg,#1976D2,#42A5F5);
+           border-radius:2px; display:inline-block; }
+
+/* Alert boxes */
+.abox { border-radius:12px; padding:1rem 1.3rem; font-size:0.87rem; margin-bottom:1rem; line-height:1.6; }
+.a-info  { background:rgba(21,101,192,0.06); border-left:4px solid #1976D2; color:#1565C0; }
+.a-warn  { background:rgba(251,140,0,0.07); border-left:4px solid #FB8C00; color:#E65100; }
+.a-green { background:rgba(67,160,71,0.07); border-left:4px solid #43A047; color:#2E7D32; }
+.a-red   { background:rgba(229,57,53,0.07); border-left:4px solid #E53935; color:#C62828; }
+.a-pub   { background:linear-gradient(135deg,#E8F5E9,#C8E6C9); border-left:4px solid #43A047; color:#2E7D32; font-weight:600; }
+
+/* Chart containers */
+.cbox { background:#fff; border-radius:18px; padding:1.4rem; margin-bottom:1.2rem;
+        box-shadow:0 4px 20px rgba(21,101,192,0.08); }
+
+/* Buttons */
+.stButton>button {
+    background:linear-gradient(135deg,#1976D2,#1565C0) !important;
+    border:none !important; border-radius:12px !important;
+    color:#fff !important; font-weight:600 !important;
+    box-shadow:0 4px 14px rgba(21,101,192,0.35) !important;
+    transition:all 0.2s !important; padding:0.6rem 1.5rem !important;
+}
+.stButton>button:hover {
+    background:linear-gradient(135deg,#1E88E5,#1976D2) !important;
+    transform:translateY(-1px) !important;
+    box-shadow:0 6px 20px rgba(21,101,192,0.45) !important;
+}
+/* Danger button overrides handled via parent div */
+div[data-hapus] .stButton>button {
+    background:linear-gradient(135deg,#E53935,#C62828) !important;
+    box-shadow:0 4px 14px rgba(229,57,53,0.35) !important;
+}
+
+/* Inputs */
+.stTextInput>div>div, .stSelectbox>div>div, .stNumberInput>div>div {
+    background:#fff !important; border:1.5px solid #BBDEFB !important; border-radius:12px !important;
+}
+.stTextInput>div>div:focus-within, .stSelectbox>div>div:focus-within, .stNumberInput>div>div:focus-within {
+    border-color:#1976D2 !important; box-shadow:0 0 0 3px rgba(25,118,210,0.15) !important;
+}
+
+/* Labels & text */
+label { color:#1565C0 !important; font-size:0.84rem !important; font-weight:600 !important; }
+p, div { color:#1A237E; }
+h1,h2,h3 { color:#1565C0 !important; }
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] { background:rgba(255,255,255,0.65); border-radius:14px; padding:5px; gap:4px; }
+.stTabs [data-baseweb="tab"] { border-radius:10px; color:#1565C0 !important; font-weight:600; padding:0.5rem 1.2rem; }
+.stTabs [aria-selected="true"] { background:#1976D2 !important; color:#fff !important; box-shadow:0 4px 10px rgba(25,118,210,0.3); }
+
+/* Dataframe */
+.stDataFrame { border-radius:14px !important; overflow:hidden !important; box-shadow:0 4px 16px rgba(21,101,192,0.08) !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:#E3F2FD; }
+::-webkit-scrollbar-thumb { background:rgba(21,101,192,0.3); border-radius:3px; }
+
+/* Badge role */
+.role-badge { display:inline-block; padding:3px 12px; border-radius:20px; font-size:0.7rem; font-weight:700;
+              letter-spacing:1px; text-transform:uppercase; }
+.rb-admin  { background:rgba(229,57,53,0.15); color:#C62828; border:1px solid rgba(229,57,53,0.25); }
+.rb-pegawai { background:rgba(25,118,210,0.12); color:#1565C0; border:1px solid rgba(25,118,210,0.2); }
+</style>
+""", unsafe_allow_html=True)
+
+PL = dict(
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(227,242,253,0.35)",
+    font=dict(color="#1A237E", family="Plus Jakarta Sans", size=12),
+    xaxis=dict(gridcolor="rgba(21,101,192,0.08)", tickfont=dict(color="#1565C0")),
+    yaxis=dict(gridcolor="rgba(21,101,192,0.08)", tickfont=dict(color="#1565C0")),
+    margin=dict(l=20,r=20,t=45,b=20),
+    hoverlabel=dict(bgcolor="#fff", font=dict(color="#1A237E")),
+    legend=dict(bgcolor="rgba(255,255,255,0.9)", borderwidth=1, font=dict(color="#1A237E")),
+)
+
+# ─── HELPERS ────────────────────────────────────────────────────────────────────
+def render_header(subtitle=""):
+    lb = logo_b64()
+    img = (f'<img src="data:image/png;base64,{lb}" '
+           f'style="width:80px;height:80px;object-fit:contain;border-radius:14px;'
+           f'background:white;padding:6px;flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,0.15);">')  \
+           if lb else '<div style="font-size:3rem;">🏥</div>'
+    sub = (f'<br><span style="color:rgba(255,255,255,.82);font-size:.8rem;font-style:italic;">'
+           f'{subtitle}</span>') if subtitle else ""
+    st.markdown(
+        f'<div class="hdr">{img}'
+        f'<div style="position:relative;z-index:1;">'
+        f'<div class="hdr-badge">🏥 Sistem Informasi Digital</div>'
+        f'<div class="hdr-title">SITUNTAS</div>'
+        f'<div class="hdr-sub">Sistem Informasi Terpadu Monitoring Angka Stunting Secara Realtime<br>'
+        f'Kecamatan Kota SoE — Kabupaten Timor Tengah Selatan{sub}</div>'
+        f'</div></div>',
+        unsafe_allow_html=True)
+
+def abox(msg, t="info"):
+    cls = {"info":"a-info","warn":"a-warn","green":"a-green","red":"a-red","pub":"a-pub"}.get(t,"a-info")
+    st.markdown(f'<div class="abox {cls}">{msg}</div>', unsafe_allow_html=True)
+
+def sec(title):
+    st.markdown(f'<div class="sec"><span class="sec-bar"></span>{title}</div>', unsafe_allow_html=True)
+
+# ─── LOGIN ───────────────────────────────────────────────────────────────────────
 def login_page():
-    col1, col2, col3 = st.columns([1, 1.4, 1])
-    with col2:
-        logo_b64 = get_logo_b64()
-        logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="width:130px;height:130px;object-fit:contain;border-radius:16px;box-shadow:0 4px 16px rgba(21,101,192,0.2);">' if logo_b64 else '<div style="font-size:4rem;">&#x1F3E5;</div>'
-        st.markdown(f"""
-        <div style='text-align:center;padding:3rem 0 1rem;'>
-            {logo_html}
-            <div style='font-family:"Nunito",sans-serif;font-size:2.2rem;font-weight:900;color:#1565C0;letter-spacing:1px;margin-top:1rem;'>SITUNTAS</div>
-            <div style='font-size:0.78rem;color:#1976D2;letter-spacing:1.5px;text-transform:uppercase;margin-top:4px;font-weight:600;'>Sistem Informasi Terpadu Monitoring Stunting</div>
-            <div style='font-size:0.82rem;color:#42A5F5;margin-top:6px;'>Kecamatan Kota SoE &middot; Kab. Timor Tengah Selatan</div>
-        </div>
-        """, unsafe_allow_html=True)
-        with st.form("login_form"):
-            username = st.text_input("Username", placeholder="Masukkan username")
-            password = st.text_input("Password", type="password", placeholder="Masukkan password")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                login_btn = st.form_submit_button("MASUK", use_container_width=True, type="primary")
-            with col_b:
-                publik_btn = st.form_submit_button("Dashboard Publik", use_container_width=True)
-            if login_btn:
-                user = verify_user(username, password)
+    _, col, _ = st.columns([1,1.3,1])
+    with col:
+        lb = logo_b64()
+        img = (f'<img src="data:image/png;base64,{lb}" '
+               f'style="width:120px;height:120px;object-fit:contain;border-radius:18px;'
+               f'box-shadow:0 6px 20px rgba(21,101,192,0.25);">') if lb else '<div style="font-size:4rem;">🏥</div>'
+        st.markdown(
+            f'<div style="text-align:center;padding:3rem 0 1.5rem;">{img}'
+            f'<div style="font-family:Nunito,sans-serif;font-size:2.3rem;font-weight:900;'
+            f'color:#1565C0;margin-top:1rem;letter-spacing:-0.5px;">SITUNTAS</div>'
+            f'<div style="font-size:.77rem;color:#1976D2;letter-spacing:1.5px;text-transform:uppercase;margin-top:6px;font-weight:700;">'
+            f'Sistem Informasi Terpadu Monitoring Stunting</div>'
+            f'<div style="font-size:.82rem;color:#64B5F6;margin-top:8px;">'
+            f'Kecamatan Kota SoE &middot; Kab. Timor Tengah Selatan</div>'
+            f'</div>', unsafe_allow_html=True)
+        with st.form("lf"):
+            u = st.text_input("👤  Username", placeholder="Masukkan username")
+            p = st.text_input("🔑  Password", type="password", placeholder="Masukkan password")
+            ca, cb = st.columns(2)
+            with ca: lb_btn = st.form_submit_button("🔐  MASUK", use_container_width=True, type="primary")
+            with cb: pb_btn = st.form_submit_button("🌐  Dashboard Publik", use_container_width=True)
+            if lb_btn:
+                user = verify_user(u.strip(), p)
                 if user:
-                    st.session_state.logged_in = True
-                    st.session_state.user = user
-                    st.session_state.is_public = False
+                    st.session_state.logged_in  = True
+                    st.session_state.user       = user
+                    st.session_state.is_public  = False
                     st.rerun()
                 else:
-                    st.error("Username atau password salah.")
-            if publik_btn:
+                    st.error("❌ Username atau password salah.")
+            if pb_btn:
                 st.session_state.is_public = True
                 st.rerun()
-        st.markdown("<div style='text-align:center;font-size:0.75rem;color:#90A4AE;margin-top:1rem;padding-bottom:2rem;'>2026 Kecamatan Kota SoE &middot; Dikembangkan oleh Margaritha Liufeto, S.H</div>", unsafe_allow_html=True)
+        st.markdown('<div style="text-align:center;font-size:.74rem;color:#90A4AE;margin-top:.8rem;padding-bottom:2rem;">'
+                    '© 2026 Kecamatan Kota SoE &middot; Dikembangkan oleh Margaritha Liufeto, S.H</div>',
+                    unsafe_allow_html=True)
 
+# ─── SIDEBAR ────────────────────────────────────────────────────────────────────
 def render_sidebar(role="publik"):
     with st.sidebar:
-        logo_b64 = get_logo_b64()
-        if logo_b64:
-            st.markdown(f"""
-            <div style='text-align:center;padding:1.2rem 0 0.8rem;'>
-                <img src="data:image/png;base64,{logo_b64}" style="width:90px;height:90px;object-fit:contain;border-radius:14px;background:white;padding:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
-                <div class='sidebar-title' style='margin-top:0.6rem;'>SITUNTAS</div>
-                <div class='sidebar-sub'>Kecamatan Kota SoE</div>
-            </div>
-            <hr style='border-color:rgba(255,255,255,0.15);margin:0 0 1rem;'>
-            """, unsafe_allow_html=True)
+        lb = logo_b64()
+        if lb:
+            st.markdown(
+                f'<div style="text-align:center;padding:1.4rem 0 .8rem;">'
+                f'<img src="data:image/png;base64,{lb}" '
+                f'style="width:90px;height:90px;object-fit:contain;border-radius:16px;'
+                f'background:white;padding:6px;box-shadow:0 4px 14px rgba(0,0,0,0.18);">'
+                f'<div style="font-family:Nunito,sans-serif;font-size:1.5rem;font-weight:900;margin-top:.7rem;">SITUNTAS</div>'
+                f'<div style="font-size:.67rem;opacity:.6;letter-spacing:1.2px;text-transform:uppercase;">Kecamatan Kota SoE</div>'
+                f'</div><hr style="border-color:rgba(255,255,255,.12);margin:0 0 .8rem;">',
+                unsafe_allow_html=True)
 
         if role == "publik":
-            menu = "Dashboard Publik"
-            st.markdown("<div style='padding:0.5rem 1rem;background:rgba(255,255,255,0.15);border-radius:8px;margin-bottom:1rem;'><span style='color:#FFFFFF;font-size:0.8rem;'>Mode Publik</span></div>", unsafe_allow_html=True)
-            if st.button("Login sebagai Pegawai", use_container_width=True):
-                st.session_state.is_public = False
-                st.session_state.logged_in = False
+            menu = "📊 Dashboard"
+            st.markdown('<div style="padding:.6rem 1rem;background:rgba(255,255,255,.12);'
+                        'border-radius:10px;margin-bottom:.8rem;font-size:.8rem;font-weight:600;">'
+                        '🌐 Mode Publik — Akses Terbatas</div>', unsafe_allow_html=True)
+            if st.button("🔐 Login sebagai Pegawai", use_container_width=True):
+                st.session_state.is_public  = False
+                st.session_state.logged_in  = False
                 st.rerun()
         else:
-            menu_opts = ["Dashboard Utama"]
-            if role in ["pegawai","admin"]:
-                menu_opts += ["Input Data", "Import Google Sheets", "Kelola Data"]
+            # Menu berbeda untuk admin vs pegawai — TANPA DUPLIKAT
             if role == "admin":
-                menu_opts += ["Analisis & Tren", "Laporan", "Kelola Pengguna", "Kelola Data"]
-            menu = st.radio("Navigasi", menu_opts, label_visibility="collapsed")
+                opts = [
+                    "📊 Dashboard Utama",
+                    "📋 Input Data",
+                    "📤 Import CSV",
+                    "📈 Analisis & Tren",
+                    "📄 Laporan",
+                    "👥 Kelola Pengguna",
+                    "⚙️ Kelola Data",
+                    "🔧 Test Koneksi",
+                ]
+            else:
+                opts = [
+                    "📊 Dashboard Utama",
+                    "📋 Input Data",
+                    "📤 Import CSV",
+                    "⚙️ Kelola Data",
+                ]
+            menu = st.radio("Menu", opts, label_visibility="collapsed")
 
-        st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:1rem 0;'>", unsafe_allow_html=True)
-        st.markdown("**Filter Periode**")
-        tahun = st.selectbox("Tahun", TAHUN_LIST, index=TAHUN_LIST.index(datetime.now().year) if datetime.now().year in TAHUN_LIST else 2)
-        bulan = st.selectbox("Bulan", BULAN_LIST, index=datetime.now().month-1)
+        st.markdown("<hr style='border-color:rgba(255,255,255,.1);margin:.8rem 0;'>", unsafe_allow_html=True)
+        st.markdown("<span style='font-size:.8rem;font-weight:700;opacity:.9;'>🗓️ Filter Periode</span>",
+                    unsafe_allow_html=True)
+        curr_y = datetime.now().year
+        tahun  = st.selectbox("Tahun", TAHUN_LIST,
+                              index=TAHUN_LIST.index(curr_y) if curr_y in TAHUN_LIST else 2,
+                              label_visibility="collapsed")
+        bulan  = st.selectbox("Bulan", BULAN_LIST, index=datetime.now().month-1,
+                               label_visibility="collapsed")
 
         if role != "publik":
-            st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:1rem 0;'>", unsafe_allow_html=True)
-            user = st.session_state.user
-            wilayah_info = "Akses semua wilayah." if user["role"] == "admin" else ("Wilayah: " + str(user["wilayah"]))
+            st.markdown("<hr style='border-color:rgba(255,255,255,.1);margin:.8rem 0;'>", unsafe_allow_html=True)
+            u    = st.session_state.user
+            rb   = "rb-admin" if u["role"]=="admin" else "rb-pegawai"
+            wil  = "Semua wilayah" if str(u.get("wilayah","")).lower() in ["semua",""] else str(u["wilayah"])
             st.markdown(
-                "<div style='font-size:0.78rem;color:rgba(255,255,255,0.7);'>Login sebagai:<br>"
-                "<span style='color:#FFFFFF;font-weight:700;'>" + str(user["nama"]) + "</span><br>"
-                "<span style='font-size:0.7rem;background:rgba(255,255,255,0.15);padding:2px 8px;border-radius:10px;'>"
-                + str(user["role"]).upper() + "</span><br>"
-                "<span style='font-size:0.7rem;color:rgba(255,255,255,0.6);'>" + wilayah_info + "</span></div>",
-                unsafe_allow_html=True
-            )
-            st.markdown("<div style='margin:0.5rem 0;'></div>", unsafe_allow_html=True)
-            if st.button("Keluar", use_container_width=True):
+                f'<div style="font-size:.78rem;opacity:.9;">'
+                f'Login sebagai:<br><b style="font-size:.9rem;">{u["nama"]}</b><br>'
+                f'<span class="role-badge {rb}" style="margin:.3rem 0;display:inline-block;">{str(u["role"]).upper()}</span><br>'
+                f'<span style="font-size:.71rem;opacity:.7;">{wil}</span></div>',
+                unsafe_allow_html=True)
+            st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
+            if st.button("🚪 Keluar", use_container_width=True):
                 st.session_state.logged_in = False
-                st.session_state.user = None
+                st.session_state.user      = None
                 st.rerun()
+
     return menu, tahun, bulan
-
-# ─── TEST KONEKSI (halaman debug) ──────────────────────────────────────────────
-def page_test_koneksi():
-    render_header("Test Koneksi Google Sheets")
-    st.markdown("### Diagnostik Koneksi")
-
-    # Test 1: secrets
-    st.markdown("**1. Cek Secrets**")
-    try:
-        sn = st.secrets["sheet_name"]
-        st.success("sheet_name = " + sn)
-    except Exception as e:
-        st.error("GAGAL baca sheet_name: " + str(e))
-
-    try:
-        gcp = st.secrets["gcp_service_account"]
-        st.success("gcp_service_account ditemukan, client_email = " + str(gcp.get("client_email","-")))
-    except Exception as e:
-        st.error("GAGAL baca gcp_service_account: " + str(e))
-
-    # Test 2: koneksi gspread
-    st.markdown("**2. Cek Koneksi gspread**")
-    gc, err = get_gsheet_client()
-    if gc:
-        st.success("Koneksi gspread berhasil!")
-    else:
-        st.error("Koneksi GAGAL: " + str(err))
-        return
-
-    # Test 3: buka spreadsheet
-    st.markdown("**3. Cek Buka Spreadsheet**")
-    try:
-        sh = gc.open(st.secrets["sheet_name"])
-        st.success("Spreadsheet ditemukan: " + sh.title)
-        worksheets = [ws.title for ws in sh.worksheets()]
-        st.info("Sheet yang ada: " + str(worksheets))
-    except Exception as e:
-        st.error("GAGAL buka spreadsheet: " + str(e))
-        return
-
-    # Test 4: buka sheet data_stunting
-    st.markdown("**4. Cek Sheet data_stunting**")
-    ws, err = get_sheet("data_stunting")
-    if ws:
-        st.success("Sheet data_stunting berhasil dibuka!")
-        try:
-            vals = ws.get_all_values()
-            st.info("Baris di sheet: " + str(len(vals)) + " baris. Header: " + str(vals[0] if vals else "kosong"))
-        except Exception as e:
-            st.error("Gagal baca: " + str(e))
-    else:
-        st.error("GAGAL buka data_stunting: " + str(err))
-
-    # Test 5: tulis data test
-    st.markdown("**5. Test Tulis Data**")
-    if st.button("Klik untuk Test Simpan 1 Baris Data", type="primary"):
-        ws, err = get_sheet("data_stunting")
-        if ws:
-            try:
-                test_row = ["TEST", "Mei", "5", "Kelurahan Test", "Posyandu Test",
-                            "10", "8", "1", "admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
-                ws.append_row(test_row)
-                st.success("BERHASIL tulis data test! Cek Google Sheets sekarang.")
-            except Exception as e:
-                st.error("GAGAL tulis: " + str(e))
-        else:
-            st.error("Tidak bisa buka sheet: " + str(err))
-
-    st.markdown("**6. Hapus Data Test**")
-    if st.button("Hapus baris TEST dari Sheets"):
-        ws, err = get_sheet("data_stunting")
-        if ws:
-            try:
-                vals = ws.get_all_values()
-                for i, row in enumerate(vals):
-                    if row and row[0] == "TEST":
-                        ws.delete_rows(i+1)
-                        st.success("Baris TEST berhasil dihapus.")
-                        break
-            except Exception as e:
-                st.error("Gagal hapus: " + str(e))
 
 # ─── DASHBOARD ──────────────────────────────────────────────────────────────────
 def page_dashboard(df, tahun, bulan, is_public=False):
     render_header()
     if is_public:
-        st.markdown("<div class='public-banner'><strong>Dashboard Publik</strong> — Login diperlukan untuk fitur lainnya.</div>", unsafe_allow_html=True)
+        abox("🌐 <b>Dashboard Publik</b> — Data ditampilkan secara terbuka untuk transparansi masyarakat.", "pub")
 
-    bulan_ke = get_bulan_ke(bulan)
-    df_bulan = df[(df["tahun"]==tahun) & (df["bulan"]==bulan)] if not df.empty else pd.DataFrame()
-    bulan_lalu = BULAN_LIST[bulan_ke-2] if bulan_ke > 1 else None
-    df_lalu = df[(df["tahun"]==tahun) & (df["bulan"]==bulan_lalu)] if (bulan_lalu and not df.empty) else pd.DataFrame()
+    bk  = get_bulan_ke(bulan)
+    db  = df[(df["tahun"]==tahun)&(df["bulan"]==bulan)] if not df.empty else pd.DataFrame()
+    bl  = BULAN_LIST[bk-2] if bk > 1 else None
+    dl  = df[(df["tahun"]==tahun)&(df["bulan"]==bl)] if (bl and not df.empty) else pd.DataFrame()
 
-    total_stunting = int(df_bulan["stunting"].sum()) if not df_bulan.empty else 0
-    total_hadir = int(df_bulan["hadir"].sum()) if not df_bulan.empty else 0
-    total_sasaran = int(df_bulan["sasaran"].sum()) if not df_bulan.empty else 0
-    wilayah_lapor = df_bulan["wilayah"].nunique() if not df_bulan.empty else 0
-    posyandu_aktif = df_bulan["posyandu"].nunique() if not df_bulan.empty else 0
-    pct_hadir = round(total_hadir/total_sasaran*100,1) if total_sasaran > 0 else 0
-    stunting_lalu = int(df_lalu["stunting"].sum()) if not df_lalu.empty else None
+    ts  = int(db["stunting"].sum()) if not db.empty else 0
+    th  = int(db["hadir"].sum())    if not db.empty else 0
+    tsa = int(db["sasaran"].sum())  if not db.empty else 0
+    wl  = db["wilayah"].nunique()   if not db.empty else 0
+    pa  = db["posyandu"].nunique()  if not db.empty else 0
+    ph  = round(th/tsa*100,1)       if tsa > 0 else 0
+    sl  = int(dl["stunting"].sum()) if not dl.empty else None
 
-    def delta(now, prev):
-        if prev is None: return ""
-        d = now - prev
-        if d > 0: return '<span class="metric-delta-up">+' + str(d) + ' dari bln lalu</span>'
-        elif d < 0: return '<span class="metric-delta-down">' + str(d) + ' dari bln lalu</span>'
-        return '<span style="color:#90A4AE;font-size:0.78rem;">sama bln lalu</span>'
+    def dlt(n, p):
+        if p is None: return ""
+        d = n - p
+        if d > 0: return f'<span class="dup">▲ +{d} dari bln lalu</span>'
+        if d < 0: return f'<span class="ddown">▼ {abs(d)} dari bln lalu</span>'
+        return '<span style="color:#90A4AE;font-size:.77rem;">= sama seperti bln lalu</span>'
 
-    st.markdown("<div class='section-title'><span>|</span> Ringkasan Bulan " + bulan + " " + str(tahun) + "</div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div class='metric-grid'>"
-        "<div class='metric-card mc-red'><div class='metric-icon'>&#x1F534;</div><div class='metric-label'>Total Kasus Stunting</div><div class='metric-value'>" + str(total_stunting) + "</div><div class='metric-sub'>" + delta(total_stunting, stunting_lalu) + "</div></div>"
-        "<div class='metric-card mc-blue'><div class='metric-icon'>&#x1F476;</div><div class='metric-label'>Kehadiran Posyandu</div><div class='metric-value'>" + str(total_hadir) + "</div><div class='metric-sub'><span style='color:#1976D2;'>" + str(pct_hadir) + "%</span> dari " + str(total_sasaran) + " sasaran</div></div>"
-        "<div class='metric-card mc-green'><div class='metric-icon'>&#x1F3D8;</div><div class='metric-label'>Wilayah Melapor</div><div class='metric-value'>" + str(wilayah_lapor) + "</div><div class='metric-sub'>dari 13 Kel/Desa</div></div>"
-        "<div class='metric-card mc-yellow'><div class='metric-icon'>&#x1F3E5;</div><div class='metric-label'>Posyandu Aktif</div><div class='metric-value'>" + str(posyandu_aktif) + "</div><div class='metric-sub'>dari 33 posyandu</div></div>"
-        "</div>",
-        unsafe_allow_html=True
-    )
+    sec(f"Ringkasan {bulan} {tahun}")
+    st.markdown(f"""
+    <div class="mgrid">
+      <div class="mcard mc-r">
+        <div class="micon">🔴</div>
+        <div class="mlabel">Total Kasus Stunting</div>
+        <div class="mval">{ts:,}</div>
+        <div class="msub">{dlt(ts,sl)}</div>
+      </div>
+      <div class="mcard mc-b">
+        <div class="micon">👶</div>
+        <div class="mlabel">Kehadiran Posyandu</div>
+        <div class="mval">{th:,}</div>
+        <div class="msub"><span style="color:#1976D2;font-weight:700;">{ph}%</span> dari {tsa:,} sasaran</div>
+      </div>
+      <div class="mcard mc-g">
+        <div class="micon">🏘️</div>
+        <div class="mlabel">Wilayah Melapor</div>
+        <div class="mval">{wl}</div>
+        <div class="msub">dari {len(WILAYAH)} Kel/Desa</div>
+      </div>
+      <div class="mcard mc-y">
+        <div class="micon">🏥</div>
+        <div class="mlabel">Posyandu Aktif</div>
+        <div class="mval">{pa}</div>
+        <div class="msub">dari 33 posyandu</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if df_bulan.empty:
-        st.markdown("<div class='alert-box alert-warning'>Belum ada data untuk bulan <strong>" + bulan + " " + str(tahun) + "</strong>.</div>", unsafe_allow_html=True)
+    if db.empty:
+        abox(f"⚠️ Belum ada data untuk <b>{bulan} {tahun}</b>. Silakan input data terlebih dahulu.", "warn")
         return
 
-    df_wil = df_bulan.groupby("wilayah",as_index=False).agg(stunting=("stunting","sum"),hadir=("hadir","sum"),sasaran=("sasaran","sum"))
-    if not df_lalu.empty:
-        df_wil_lalu = df_lalu.groupby("wilayah",as_index=False).agg(stunting_lalu=("stunting","sum"))
-        df_wil = df_wil.merge(df_wil_lalu, on="wilayah", how="left")
-        df_wil["trend"] = df_wil.apply(lambda r: "Naik" if r["stunting"]>r.get("stunting_lalu",r["stunting"]) else ("Turun" if r["stunting"]<r.get("stunting_lalu",r["stunting"]) else "Tetap"), axis=1)
+    dw = db.groupby("wilayah",as_index=False).agg(
+        stunting=("stunting","sum"), hadir=("hadir","sum"), sasaran=("sasaran","sum"))
+    if not dl.empty:
+        dw2 = dl.groupby("wilayah",as_index=False).agg(sl2=("stunting","sum"))
+        dw  = dw.merge(dw2, on="wilayah", how="left")
+        dw["trend"] = dw.apply(
+            lambda r: "Naik"  if r["stunting"] > r.get("sl2", r["stunting"])
+                 else "Turun" if r["stunting"] < r.get("sl2", r["stunting"])
+                 else "Tetap", axis=1)
     else:
-        df_wil["trend"] = "Data Awal"
-    df_wil["pct_hadir"] = (df_wil["hadir"]/df_wil["sasaran"]*100).round(1).fillna(0)
-    df_wil = df_wil.sort_values("stunting", ascending=True)
-    warna_map = {"Naik":"#E53935","Turun":"#43A047","Tetap":"#FB8C00","Data Awal":"#1976D2"}
+        dw["trend"] = "Data Awal"
+    dw["ph2"] = (dw["hadir"]/dw["sasaran"]*100).round(1).fillna(0)
+    dw = dw.sort_values("stunting", ascending=True)
+    wm = {"Naik":"#E53935","Turun":"#43A047","Tetap":"#FB8C00","Data Awal":"#1976D2"}
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
-        fig = go.Figure(go.Bar(x=df_wil["stunting"],y=df_wil["wilayah"],orientation="h",
-                               marker=dict(color=[warna_map.get(t,"#1976D2") for t in df_wil["trend"]]),
-                               text=df_wil["stunting"],textposition="outside",textfont=dict(color="#1A237E",size=12),
-                               hovertemplate="<b>%{y}</b><br>Stunting: <b>%{x}</b><extra></extra>"))
-        fig.update_layout(title=dict(text="Stunting per Wilayah",font=dict(color="#1A237E",size=14),x=0),height=450,**PLOT_LAYOUT)
+    sec(f"Kasus Stunting per Kelurahan/Desa — {bulan} {tahun}")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown('<div class="cbox">', unsafe_allow_html=True)
+        fig = go.Figure(go.Bar(
+            x=dw["stunting"], y=dw["wilayah"], orientation="h",
+            marker_color=[wm.get(t,"#1976D2") for t in dw["trend"]],
+            text=dw["stunting"], textposition="outside",
+            textfont=dict(color="#1A237E",size=12),
+            hovertemplate="<b>%{y}</b><br>Stunting: <b>%{x}</b><extra></extra>"))
+        fig.update_layout(title=dict(text="Stunting per Wilayah",font=dict(color="#1A237E",size=14),x=0),
+                          height=460, **PL)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
         st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown('<div style="font-size:.76rem;color:#607D8B;margin-top:-6px;">'
+                    '🔴 Naik &nbsp;|&nbsp; 🟢 Turun &nbsp;|&nbsp; 🟡 Tetap &nbsp;|&nbsp; 🔵 Data Awal</div>',
+                    unsafe_allow_html=True)
 
-    with col2:
-        st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
+    with c2:
+        st.markdown('<div class="cbox">', unsafe_allow_html=True)
         fig2 = go.Figure()
-        fig2.add_trace(go.Bar(x=df_wil["sasaran"],y=df_wil["wilayah"],orientation="h",name="Sasaran",marker_color="rgba(21,101,192,0.15)"))
-        fig2.add_trace(go.Bar(x=df_wil["hadir"],y=df_wil["wilayah"],orientation="h",name="Hadir",marker_color="#1976D2",
-                              text=[f"{v} ({p}%)" for v,p in zip(df_wil["hadir"],df_wil["pct_hadir"])],
+        fig2.add_trace(go.Bar(x=dw["sasaran"],y=dw["wilayah"],orientation="h",
+                              name="Sasaran",marker_color="rgba(21,101,192,0.15)"))
+        fig2.add_trace(go.Bar(x=dw["hadir"],y=dw["wilayah"],orientation="h",
+                              name="Hadir",marker_color="#1976D2",
+                              text=[f"{v} ({p}%)" for v,p in zip(dw["hadir"],dw["ph2"])],
                               textposition="outside",textfont=dict(color="#1A237E",size=11)))
-        fig2.update_layout(barmode="overlay",title=dict(text="Sasaran vs Kehadiran",font=dict(color="#1A237E",size=14),x=0),height=450,**PLOT_LAYOUT)
+        fig2.update_layout(barmode="overlay",
+                           title=dict(text="Sasaran vs Kehadiran",font=dict(color="#1A237E",size=14),x=0),
+                           height=460, **PL)
         st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar":False})
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='section-title'><span>|</span> Tabel Rekapitulasi Wilayah</div>", unsafe_allow_html=True)
-    df_tabel = df_wil[["wilayah","sasaran","hadir","pct_hadir","stunting"]].rename(columns={"wilayah":"Wilayah","sasaran":"Sasaran","hadir":"Hadir","pct_hadir":"Cakupan (%)","stunting":"Kasus Stunting"})
-    st.dataframe(df_tabel.sort_values("Kasus Stunting",ascending=False), use_container_width=True, hide_index=True)
+    sec("Tabel Rekapitulasi Wilayah")
+    df_tb = dw[["wilayah","sasaran","hadir","ph2","stunting","trend"]].rename(columns={
+        "wilayah":"Wilayah","sasaran":"Sasaran","hadir":"Hadir",
+        "ph2":"Cakupan (%)","stunting":"Kasus Stunting","trend":"Trend"})
+    st.dataframe(df_tb.sort_values("Kasus Stunting",ascending=False),
+                 use_container_width=True, hide_index=True)
 
-# ─── INPUT DATA ────────────────────────────────────────────────────────────────
+# ─── INPUT DATA ──────────────────────────────────────────────────────────────────
 def page_input(df, user):
     render_header("Input Data Bulanan")
-    if user["role"] == "admin":
-        info_wilayah = "Akses semua wilayah."
-    else:
-        info_wilayah = "Wilayah: <strong>" + str(user["wilayah"]) + "</strong>"
-    st.markdown("<div class='alert-box'>Login sebagai <strong>" + str(user["nama"]) + "</strong>. " + info_wilayah + "</div>", unsafe_allow_html=True)
+    role    = str(user.get("role","")).lower()
+    wilayah = str(user.get("wilayah","semua"))
+    opts    = list(WILAYAH.keys()) if (role=="admin" or wilayah.lower()=="semua") else [wilayah]
 
-    wilayah_opts = list(WILAYAH.keys()) if user["role"]=="admin" else [user["wilayah"]]
-    with st.form("form_input", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            tahun_in = st.selectbox("Tahun *", TAHUN_LIST, index=2)
-            bulan_in = st.selectbox("Bulan *", BULAN_LIST, index=datetime.now().month-1)
-            wilayah_in = st.selectbox("Kelurahan/Desa *", wilayah_opts)
-        with col2:
-            posyandu_in = st.selectbox("Posyandu *", WILAYAH.get(wilayah_in,[]))
-            sasaran_in = st.number_input("Total Sasaran *", min_value=0, step=1)
-            hadir_in = st.number_input("Jumlah Kehadiran *", min_value=0, step=1)
-        stunting_in = st.number_input("Jumlah Kasus Stunting *", min_value=0, step=1)
-        submitted = st.form_submit_button("SIMPAN DATA", use_container_width=True, type="primary")
+    rb  = "rb-admin" if role=="admin" else "rb-pegawai"
+    wik = "Akses <b>semua wilayah</b>" if role=="admin" else f"Wilayah: <b>{wilayah}</b>"
+    abox(f'<span class="role-badge {rb}">{role.upper()}</span> &nbsp;{user["nama"]} &nbsp;|&nbsp; {wik}')
 
-    if submitted:
-        if sasaran_in == 0:
-            st.error("Total sasaran tidak boleh 0.")
-        elif hadir_in > sasaran_in:
-            st.error("Kehadiran tidak boleh melebihi sasaran.")
+    with st.form("fi", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            ti = st.selectbox("Tahun *", TAHUN_LIST, index=2)
+            bi = st.selectbox("Bulan *", BULAN_LIST, index=datetime.now().month-1)
+            wi = st.selectbox("Kelurahan/Desa *", opts)
+        with c2:
+            pi  = st.selectbox("Posyandu *", WILAYAH.get(wi,[]))
+            sai = st.number_input("Total Sasaran (jumlah anak terdaftar) *", min_value=0, step=1)
+            hi  = st.number_input("Jumlah Kehadiran *", min_value=0, step=1)
+        sti = st.number_input("Jumlah Kasus Stunting *", min_value=0, step=1)
+        sub = st.form_submit_button("💾  SIMPAN DATA", use_container_width=True, type="primary")
+
+    if sub:
+        if sai == 0:
+            st.error("❌ Total sasaran tidak boleh 0.")
+        elif hi > sai:
+            st.error("❌ Kehadiran tidak boleh melebihi total sasaran.")
+        elif sti > hi:
+            st.error("❌ Kasus stunting tidak boleh melebihi jumlah kehadiran.")
         else:
-            # Selalu ambil data terbaru dari Sheets sebelum simpan
             load_data.clear()
-            df_fresh = load_data()
-            cek = df_fresh[(df_fresh["tahun"]==tahun_in)&(df_fresh["bulan"]==bulan_in)&(df_fresh["posyandu"]==posyandu_in)] if not df_fresh.empty else pd.DataFrame()
+            df_f = load_data()
+            cek  = df_f[(df_f["tahun"]==ti)&(df_f["bulan"]==bi)&(df_f["posyandu"]==pi)] \
+                   if not df_f.empty else pd.DataFrame()
             if not cek.empty:
-                st.warning("Data " + posyandu_in + " — " + bulan_in + " " + str(tahun_in) + " sudah ada.")
+                st.warning(f"⚠️ Data {pi} — {bi} {ti} sudah ada. Gunakan menu Kelola Data untuk mengubah.")
             else:
-                new_row = {"tahun":tahun_in,"bulan":bulan_in,"bulan_ke":get_bulan_ke(bulan_in),
-                           "wilayah":wilayah_in,"posyandu":posyandu_in,"sasaran":sasaran_in,
-                           "hadir":hadir_in,"stunting":stunting_in,"diinput_oleh":user["username"],
-                           "waktu_input":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                df_fresh = pd.concat([df_fresh, pd.DataFrame([new_row])], ignore_index=True)
-                ok, msg = save_data(df_fresh)
+                nr = {"tahun":ti,"bulan":bi,"bulan_ke":get_bulan_ke(bi),"wilayah":wi,"posyandu":pi,
+                      "sasaran":sai,"hadir":hi,"stunting":sti,
+                      "diinput_oleh":user["username"],
+                      "waktu_input":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                df_f = pd.concat([df_f, pd.DataFrame([nr])], ignore_index=True)
+                ok, msg = save_data(df_f)
                 if ok:
-                    st.success("Data " + posyandu_in + " — " + bulan_in + " " + str(tahun_in) + " berhasil disimpan!")
+                    st.success(f"✅ Data {pi} — {bi} {ti} berhasil disimpan!")
                 else:
-                    st.error("GAGAL simpan ke Google Sheets: " + msg)
+                    st.error(f"❌ Gagal simpan: {msg}")
                 st.rerun()
 
-    st.markdown("<div class='section-title'><span>|</span> Data Terbaru</div>", unsafe_allow_html=True)
     if not df.empty:
-        st.dataframe(df.sort_values("waktu_input",ascending=False).head(10), use_container_width=True, hide_index=True)
+        sec("10 Data Terbaru")
+        st.dataframe(df.sort_values("waktu_input",ascending=False).head(10),
+                     use_container_width=True, hide_index=True)
     return df
 
-# ─── IMPORT ────────────────────────────────────────────────────────────────────
+# ─── IMPORT CSV ───────────────────────────────────────────────────────────────────
 def page_import(df):
-    render_header("Import Data dari Google Sheets")
-    st.markdown("<div class='alert-box'>Cara Import:<br>1. Buka Google Sheets > File > Download > <strong>CSV</strong><br>2. Upload file di bawah ini > Konfirmasi Import</div>", unsafe_allow_html=True)
-    uploaded = st.file_uploader("Upload File CSV", type=["csv"])
-    if uploaded:
+    render_header("Import Data CSV")
+    abox("📥 <b>Cara pakai:</b><br>"
+         "1. Siapkan file CSV dengan kolom: <code>tahun, bulan, wilayah, posyandu, sasaran, hadir, stunting</code><br>"
+         "2. Upload file di bawah ini → Klik <b>Konfirmasi Import</b>")
+    sec("Contoh Format CSV")
+    st.dataframe(pd.DataFrame([{
+        "tahun":2026,"bulan":"Mei","wilayah":"Kelurahan Cendana",
+        "posyandu":"Posyandu Cendana I","sasaran":45,"hadir":38,"stunting":5}]),
+        use_container_width=True, hide_index=True)
+    up = st.file_uploader("📂 Upload File CSV", type=["csv"])
+    if up:
         try:
-            df_import = pd.read_csv(uploaded)
-            st.dataframe(df_import.head(), use_container_width=True, hide_index=True)
-            st.markdown("<div class='alert-box'>Total: <strong>" + str(len(df_import)) + "</strong> baris data.</div>", unsafe_allow_html=True)
-            if st.button("Konfirmasi Import", type="primary", use_container_width=True):
-                df_import["bulan_ke"] = df_import["bulan"].apply(lambda x: get_bulan_ke(x) if x in BULAN_LIST else 0)
-                df_import["diinput_oleh"] = "import"
-                df_import["waktu_input"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                df = pd.concat([df, df_import], ignore_index=True).drop_duplicates(subset=["tahun","bulan","posyandu"],keep="last")
+            di = pd.read_csv(up)
+            sec("Preview Data")
+            st.dataframe(di.head(10), use_container_width=True, hide_index=True)
+            abox(f"📊 Total <b>{len(di)}</b> baris data siap diimport.")
+            if st.button("✅ Konfirmasi Import", type="primary", use_container_width=True):
+                di["bulan_ke"]      = di["bulan"].apply(get_bulan_ke)
+                di["diinput_oleh"]  = "import_csv"
+                di["waktu_input"]   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                df = pd.concat([df, di], ignore_index=True)\
+                       .drop_duplicates(subset=["tahun","bulan","posyandu"], keep="last")
                 ok, msg = save_data(df)
-                if ok:
-                    st.success(str(len(df_import)) + " data berhasil diimport!")
-                else:
-                    st.error("Gagal simpan: " + msg)
+                if ok: st.success(f"✅ {len(di)} data berhasil diimport!")
+                else:  st.error(f"❌ Gagal simpan: {msg}")
                 st.rerun()
         except Exception as e:
-            st.error("Error: " + str(e))
+            st.error(f"❌ Error membaca file: {e}")
     return df
 
-# ─── ANALISIS ──────────────────────────────────────────────────────────────────
+# ─── ANALISIS ────────────────────────────────────────────────────────────────────
 def page_analisis(df, tahun):
     render_header("Analisis & Tren")
-    df_tahun = df[df["tahun"]==tahun] if not df.empty else pd.DataFrame()
-    if df_tahun.empty:
-        st.markdown("<div class='alert-box alert-warning'>Belum ada data untuk tahun " + str(tahun) + ".</div>", unsafe_allow_html=True)
-        return
-    df_agg = df_tahun.groupby(["bulan_ke","bulan"],as_index=False).agg(stunting=("stunting","sum"),hadir=("hadir","sum"),sasaran=("sasaran","sum")).sort_values("bulan_ke")
-    df_agg["pct_hadir"] = (df_agg["hadir"]/df_agg["sasaran"]*100).round(1)
-    tab1, tab2 = st.tabs(["Tren Stunting","Tren Kehadiran"])
-    with tab1:
-        st.markdown("<div class='chart-container'>",unsafe_allow_html=True)
-        fig = go.Figure(go.Scatter(x=df_agg["bulan"],y=df_agg["stunting"],mode="lines+markers",line=dict(color="#E53935",width=3),marker=dict(size=10,color="#E53935",line=dict(color="#FFFFFF",width=2)),fill="tozeroy",fillcolor="rgba(229,57,53,0.08)"))
-        fig.update_layout(title=dict(text="Tren Stunting " + str(tahun),font=dict(color="#1A237E",size=15),x=0),height=380,**PLOT_LAYOUT)
-        st.plotly_chart(fig,use_container_width=True,config={"displayModeBar":False})
-        st.markdown("</div>",unsafe_allow_html=True)
-        df_wt = df_tahun.groupby(["wilayah","bulan_ke","bulan"],as_index=False).agg(stunting=("stunting","sum")).sort_values("bulan_ke")
-        st.markdown("<div class='chart-container'>",unsafe_allow_html=True)
-        fig2 = px.line(df_wt,x="bulan",y="stunting",color="wilayah",markers=True,title="Tren per Wilayah " + str(tahun))
-        fig2.update_traces(line_width=2,marker_size=7)
-        fig2.update_layout(height=420,**PLOT_LAYOUT)
-        st.plotly_chart(fig2,use_container_width=True,config={"displayModeBar":False})
-        st.markdown("</div>",unsafe_allow_html=True)
-    with tab2:
-        st.markdown("<div class='chart-container'>",unsafe_allow_html=True)
-        fig3 = go.Figure()
-        fig3.add_trace(go.Bar(x=df_agg["bulan"],y=df_agg["sasaran"],name="Sasaran",marker_color="rgba(21,101,192,0.2)"))
-        fig3.add_trace(go.Bar(x=df_agg["bulan"],y=df_agg["hadir"],name="Hadir",marker_color="#1976D2"))
-        fig3.update_layout(barmode="overlay",title=dict(text="Kehadiran vs Sasaran " + str(tahun),font=dict(color="#1A237E",size=15),x=0),height=380,**PLOT_LAYOUT)
-        st.plotly_chart(fig3,use_container_width=True,config={"displayModeBar":False})
-        st.markdown("</div>",unsafe_allow_html=True)
-        st.markdown("<div class='chart-container'>",unsafe_allow_html=True)
-        fig4 = go.Figure(go.Scatter(x=df_agg["bulan"],y=df_agg["pct_hadir"],mode="lines+markers",line=dict(color="#43A047",width=3),marker=dict(size=10,color="#43A047")))
-        fig4.add_hline(y=80,line_dash="dash",line_color="#FB8C00",annotation_text="Target 80%",annotation_font_color="#FB8C00")
-        fig4.update_layout(title=dict(text="Cakupan Kehadiran (%)",font=dict(color="#1A237E",size=15),x=0),height=380,**PLOT_LAYOUT)
-        st.plotly_chart(fig4,use_container_width=True,config={"displayModeBar":False})
-        st.markdown("</div>",unsafe_allow_html=True)
+    dt = df[df["tahun"]==tahun] if not df.empty else pd.DataFrame()
+    if dt.empty:
+        abox(f"⚠️ Belum ada data untuk tahun {tahun}.", "warn"); return
 
-# ─── LAPORAN ───────────────────────────────────────────────────────────────────
+    da = dt.groupby(["bulan_ke","bulan"],as_index=False).agg(
+        stunting=("stunting","sum"), hadir=("hadir","sum"), sasaran=("sasaran","sum")
+    ).sort_values("bulan_ke")
+    da["ph"] = (da["hadir"]/da["sasaran"]*100).round(1)
+
+    t1, t2 = st.tabs(["📉 Tren Stunting","👶 Tren Kehadiran"])
+    with t1:
+        st.markdown('<div class="cbox">', unsafe_allow_html=True)
+        fig = go.Figure(go.Scatter(
+            x=da["bulan"], y=da["stunting"], mode="lines+markers",
+            line=dict(color="#E53935",width=3),
+            marker=dict(size=10,color="#E53935",line=dict(color="#fff",width=2)),
+            fill="tozeroy", fillcolor="rgba(229,57,53,0.08)",
+            hovertemplate="<b>%{x}</b><br>Stunting: <b>%{y}</b><extra></extra>"))
+        fig.update_layout(title=dict(text=f"Tren Kasus Stunting — {tahun}",
+                          font=dict(color="#1A237E",size=15),x=0), height=380, **PL)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        dw = dt.groupby(["wilayah","bulan_ke","bulan"],as_index=False)\
+               .agg(stunting=("stunting","sum")).sort_values("bulan_ke")
+        st.markdown('<div class="cbox">', unsafe_allow_html=True)
+        fig2 = px.line(dw,x="bulan",y="stunting",color="wilayah",markers=True,
+                       title=f"Tren Stunting per Wilayah — {tahun}",
+                       labels={"bulan":"Bulan","stunting":"Kasus","wilayah":"Wilayah"})
+        fig2.update_traces(line_width=2,marker_size=7)
+        fig2.update_layout(height=420, **PL)
+        st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar":False})
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with t2:
+        st.markdown('<div class="cbox">', unsafe_allow_html=True)
+        fig3 = go.Figure()
+        fig3.add_trace(go.Bar(x=da["bulan"],y=da["sasaran"],name="Sasaran",
+                              marker_color="rgba(21,101,192,0.18)"))
+        fig3.add_trace(go.Bar(x=da["bulan"],y=da["hadir"],name="Hadir",
+                              marker_color="#1976D2"))
+        fig3.update_layout(barmode="overlay",
+                           title=dict(text=f"Kehadiran vs Sasaran — {tahun}",
+                           font=dict(color="#1A237E",size=15),x=0), height=380, **PL)
+        st.plotly_chart(fig3, use_container_width=True, config={"displayModeBar":False})
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown('<div class="cbox">', unsafe_allow_html=True)
+        fig4 = go.Figure(go.Scatter(
+            x=da["bulan"], y=da["ph"], mode="lines+markers",
+            line=dict(color="#43A047",width=3),
+            marker=dict(size=10,color="#43A047",line=dict(color="#fff",width=2)),
+            fill="tozeroy", fillcolor="rgba(67,160,71,0.08)"))
+        fig4.add_hline(y=80, line_dash="dash", line_color="#FB8C00",
+                       annotation_text="Target 80%", annotation_font_color="#FB8C00")
+        fig4.update_layout(title=dict(text="Cakupan Kehadiran Posyandu (%)",
+                           font=dict(color="#1A237E",size=15),x=0), height=380, **PL)
+        st.plotly_chart(fig4, use_container_width=True, config={"displayModeBar":False})
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# ─── LAPORAN ─────────────────────────────────────────────────────────────────────
 def page_laporan(df, tahun, bulan):
     render_header("Laporan Bulanan")
-    df_bulan = df[(df["tahun"]==tahun)&(df["bulan"]==bulan)] if not df.empty else pd.DataFrame()
-    if df_bulan.empty:
-        st.markdown("<div class='alert-box alert-warning'>Belum ada data untuk " + bulan + " " + str(tahun) + ".</div>", unsafe_allow_html=True)
-        return
-    bulan_ke = get_bulan_ke(bulan)
-    bulan_lalu = BULAN_LIST[bulan_ke-2] if bulan_ke > 1 else None
-    df_lalu = df[(df["tahun"]==tahun)&(df["bulan"]==bulan_lalu)] if (bulan_lalu and not df.empty) else pd.DataFrame()
-    rows = []
-    for wil in WILAYAH.keys():
-        r = df_bulan[df_bulan["wilayah"]==wil]
-        rl = df_lalu[df_lalu["wilayah"]==wil] if not df_lalu.empty else pd.DataFrame()
-        if r.empty:
-            rows.append({"Wilayah":wil,"Sasaran":"—","Hadir":"—","Cakupan (%)":"—","Stunting":"—","Trend":"—","Status":"Belum Lapor"})
-        else:
-            s=int(r["stunting"].sum()); h=int(r["hadir"].sum()); sa=int(r["sasaran"].sum())
-            pct=round(h/sa*100,1) if sa>0 else 0
-            sl=int(rl["stunting"].sum()) if not rl.empty else None
-            if sl is None: trend,status="—","Data Awal"
-            elif s>sl: trend,status="Naik +"+str(s-sl),"Naik"
-            elif s<sl: trend,status="Turun -"+str(sl-s),"Turun"
-            else: trend,status="Tetap","Tetap"
-            rows.append({"Wilayah":wil,"Sasaran":sa,"Hadir":h,"Cakupan (%)":pct,"Stunting":s,"Trend":trend,"Status":status})
-    df_lap = pd.DataFrame(rows)
-    st.dataframe(df_lap, use_container_width=True, hide_index=True)
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df_lap.to_excel(writer, sheet_name="Laporan " + bulan + " " + str(tahun), index=False)
-        if not df.empty: df.to_excel(writer, sheet_name="Data Lengkap", index=False)
-    buffer.seek(0)
-    st.download_button("Export ke Excel", data=buffer, file_name="SITUNTAS_" + bulan + "_" + str(tahun) + ".xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
+    db = df[(df["tahun"]==tahun)&(df["bulan"]==bulan)] if not df.empty else pd.DataFrame()
+    if db.empty:
+        abox(f"⚠️ Belum ada data untuk {bulan} {tahun}.", "warn"); return
 
-# ─── KELOLA USER ───────────────────────────────────────────────────────────────
+    bk  = get_bulan_ke(bulan)
+    bl  = BULAN_LIST[bk-2] if bk > 1 else None
+    dl  = df[(df["tahun"]==tahun)&(df["bulan"]==bl)] if (bl and not df.empty) else pd.DataFrame()
+
+    rows = []
+    for wil in WILAYAH:
+        r  = db[db["wilayah"]==wil]
+        rl = dl[dl["wilayah"]==wil] if not dl.empty else pd.DataFrame()
+        if r.empty:
+            rows.append({"Wilayah":wil,"Sasaran":"—","Hadir":"—","Cakupan (%)":"—",
+                         "Stunting":"—","Trend":"—","Status":"❌ Belum Lapor"})
+        else:
+            s  = int(r["stunting"].sum()); h = int(r["hadir"].sum()); sa = int(r["sasaran"].sum())
+            p  = round(h/sa*100,1) if sa > 0 else 0
+            sl2= int(rl["stunting"].sum()) if not rl.empty else None
+            if sl2 is None:   tr,st2 = "—","🔵 Data Awal"
+            elif s > sl2:     tr,st2 = f"▲ +{s-sl2}","⚠️ Naik"
+            elif s < sl2:     tr,st2 = f"▼ -{sl2-s}","✅ Turun"
+            else:             tr,st2 = "= Tetap","🟡 Tetap"
+            rows.append({"Wilayah":wil,"Sasaran":sa,"Hadir":h,"Cakupan (%)":p,
+                         "Stunting":s,"Trend":tr,"Status":st2})
+
+    df_lap = pd.DataFrame(rows)
+    sec(f"Rekap Laporan {bulan} {tahun}")
+    st.dataframe(df_lap, use_container_width=True, hide_index=True)
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as wr:
+        df_lap.to_excel(wr, sheet_name=f"Laporan {bulan} {tahun}", index=False)
+        if not df.empty: df.to_excel(wr, sheet_name="Data Lengkap", index=False)
+    buf.seek(0)
+    st.download_button(
+        "⬇️  Export ke Excel", data=buf,
+        file_name=f"SITUNTAS_{bulan}_{tahun}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True, type="primary")
+
+# ─── KELOLA PENGGUNA ──────────────────────────────────────────────────────────────
 def page_kelola_user():
     render_header("Kelola Pengguna")
     users = load_users()
-    tab1, tab2 = st.tabs(["Daftar Pengguna","Tambah Pengguna"])
-    with tab1:
-        st.dataframe(users[["username","nama","role","wilayah","aktif"]], use_container_width=True, hide_index=True)
-    with tab2:
-        with st.form("form_add_user", clear_on_submit=True):
-            c1,c2 = st.columns(2)
+    t1, t2, t3 = st.tabs(["👥 Daftar Pengguna","➕ Tambah Pengguna","🔑 Reset Password"])
+
+    with t1:
+        sec(f"Total {len(users)} Pengguna Terdaftar")
+        st.dataframe(users[["username","nama","role","wilayah","aktif"]],
+                     use_container_width=True, hide_index=True)
+
+    with t2:
+        with st.form("fu", clear_on_submit=True):
+            c1, c2 = st.columns(2)
             with c1:
-                nu=st.text_input("Username *"); nn=st.text_input("Nama Lengkap *"); nr=st.selectbox("Role *",["pegawai","admin"])
+                nu  = st.text_input("Username *")
+                nn  = st.text_input("Nama Lengkap *")
+                nr  = st.selectbox("Role *", ["pegawai","admin"])
             with c2:
-                np=st.text_input("Password *",type="password"); nw=st.selectbox("Wilayah *",["semua"]+list(WILAYAH.keys())); na=st.checkbox("Aktif",value=True)
-            if st.form_submit_button("Tambah", type="primary", use_container_width=True):
-                if not nu or not nn or not np:
-                    st.error("Semua field wajib diisi.")
+                np_ = st.text_input("Password *", type="password")
+                nw  = st.selectbox("Wilayah *", ["semua"]+list(WILAYAH.keys()))
+                na  = st.checkbox("Aktif", value=True)
+            if st.form_submit_button("➕ Tambah Pengguna", type="primary", use_container_width=True):
+                if not nu or not nn or not np_:
+                    st.error("❌ Username, nama, dan password wajib diisi.")
                 elif nu in users["username"].values:
-                    st.error("Username sudah ada.")
+                    st.error(f"❌ Username '{nu}' sudah digunakan.")
                 else:
-                    users = pd.concat([users, pd.DataFrame([{"username":nu,"password":hash_pw(np),"nama":nn,"role":nr,"wilayah":nw,"aktif":na}])], ignore_index=True)
+                    baru = {"username":nu,"password":hash_pw(np_),"nama":nn,
+                            "role":nr,"wilayah":nw,"aktif":str(na).upper()}
+                    users = pd.concat([users, pd.DataFrame([baru])], ignore_index=True)
                     ok, msg = save_users(users)
-                    if ok:
-                        st.success(nn + " berhasil ditambahkan!")
-                    else:
-                        st.error("Gagal simpan: " + msg)
+                    if ok: st.success(f"✅ Pengguna {nn} berhasil ditambahkan!")
+                    else:  st.error(f"❌ Gagal simpan: {msg}")
                     st.rerun()
 
-# ─── KELOLA DATA ───────────────────────────────────────────────────────────────
+    with t3:
+        abox("Gunakan fitur ini untuk mereset password pengguna yang lupa password.")
+        with st.form("freset", clear_on_submit=True):
+            pilih  = st.selectbox("Pilih Pengguna *", users["username"].tolist())
+            pw_baru = st.text_input("Password Baru *", type="password")
+            if st.form_submit_button("🔑 Reset Password", type="primary"):
+                if not pw_baru:
+                    st.error("❌ Password baru tidak boleh kosong.")
+                else:
+                    idx = users[users["username"]==pilih].index[0]
+                    users.loc[idx,"password"] = hash_pw(pw_baru)
+                    ok, msg = save_users(users)
+                    if ok: st.success(f"✅ Password {pilih} berhasil direset!")
+                    else:  st.error(f"❌ Gagal: {msg}")
+                    st.rerun()
+
+# ─── KELOLA DATA ─────────────────────────────────────────────────────────────────
 def page_kelola_data(df, user):
     render_header("Kelola Data")
-    role = user["role"]
+    role = str(user.get("role","")).lower()
 
-    # Filter data sesuai hak akses
+    # Akses berbeda: admin bisa semua, pegawai hanya miliknya
     if role == "admin":
-        df_akses = df.copy()
-        st.markdown("<div class='alert-box'>Mode <strong>Admin</strong> — dapat mengedit dan menghapus semua data.</div>", unsafe_allow_html=True)
+        df_akses = df.copy() if not df.empty else pd.DataFrame()
+        abox("<span class='role-badge rb-admin'>ADMIN</span> &nbsp;"
+             "Dapat melihat, mengedit, dan <b>menghapus semua data</b> dari seluruh pengguna.")
     else:
-        df_akses = df[df["diinput_oleh"] == user["username"]].copy() if not df.empty else pd.DataFrame()
-        st.markdown("<div class='alert-box'>Mode <strong>Pegawai</strong> — hanya dapat mengedit/menghapus data yang Anda input sendiri.</div>", unsafe_allow_html=True)
+        df_akses = df[df["diinput_oleh"]==user["username"]].copy() if not df.empty else pd.DataFrame()
+        abox("<span class='role-badge rb-pegawai'>PEGAWAI</span> &nbsp;"
+             f"Hanya dapat mengelola data yang diinput oleh <b>{user['username']}</b>.")
 
-    tab1, tab2 = st.tabs(["Edit Data", "Hapus Data"])
+    t1, t2 = st.tabs(["✏️ Edit Data","🗑️ Hapus Data"])
 
-    with tab1:
+    # ── TAB EDIT ──
+    with t1:
         if df_akses.empty:
-            st.info("Tidak ada data yang dapat diedit.")
+            abox("Belum ada data yang dapat diedit.", "warn")
         else:
-            c1,c2,c3 = st.columns(3)
-            with c1: t = st.selectbox("Tahun", sorted(df_akses["tahun"].astype(str).unique()), key="te")
+            tahun_opts = sorted(df_akses["tahun"].dropna().astype(str).unique().tolist())
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                te = st.selectbox("Tahun", tahun_opts, key="edit_tahun")
             with c2:
-                bulan_tersedia = [x for x in BULAN_LIST if x in df_akses[df_akses["tahun"].astype(str)==t]["bulan"].values]
-                b = st.selectbox("Bulan", bulan_tersedia if bulan_tersedia else BULAN_LIST[:1], key="be")
+                bl_opts = [b for b in BULAN_LIST
+                           if b in df_akses[df_akses["tahun"].astype(str)==te]["bulan"].values]
+                be = st.selectbox("Bulan", bl_opts or ["—"], key="edit_bulan")
             with c3:
-                pos_tersedia = df_akses[(df_akses["tahun"].astype(str)==t)&(df_akses["bulan"]==b)]["posyandu"].unique().tolist()
-                p = st.selectbox("Posyandu", pos_tersedia if pos_tersedia else ["—"], key="pe")
+                ps_opts = df_akses[(df_akses["tahun"].astype(str)==te)&
+                                   (df_akses["bulan"]==be)]["posyandu"].unique().tolist()
+                pe = st.selectbox("Posyandu", ps_opts or ["—"], key="edit_pos")
 
-            if p and p != "—":
-                idx = df[(df["tahun"].astype(str)==t)&(df["bulan"]==b)&(df["posyandu"]==p)].index
+            if pe and pe != "—":
+                idx = df[(df["tahun"].astype(str)==te)&
+                          (df["bulan"]==be)&(df["posyandu"]==pe)].index
                 if len(idx) > 0:
                     i = idx[0]
-                    # Info siapa yang input
                     diinput = str(df.loc[i,"diinput_oleh"])
-                    st.markdown("<div class='alert-box'>Data diinput oleh: <strong>" + diinput + "</strong></div>", unsafe_allow_html=True)
-                    with st.form("fe"):
-                        e1,e2,e3 = st.columns(3)
-                        with e1: ns = st.number_input("Sasaran", value=int(df.loc[i,"sasaran"]), min_value=0)
-                        with e2: nh = st.number_input("Hadir", value=int(df.loc[i,"hadir"]), min_value=0)
+                    wil_str = str(df.loc[i,"wilayah"])
+                    abox(f"<b>{pe}</b> — {be} {te} &nbsp;|&nbsp; "
+                         f"Wilayah: {wil_str} &nbsp;|&nbsp; Diinput oleh: <b>{diinput}</b>")
+                    with st.form("fed"):
+                        e1, e2, e3 = st.columns(3)
+                        with e1: ns  = st.number_input("Sasaran",  value=int(df.loc[i,"sasaran"]),  min_value=0)
+                        with e2: nh  = st.number_input("Hadir",    value=int(df.loc[i,"hadir"]),    min_value=0)
                         with e3: nst = st.number_input("Stunting", value=int(df.loc[i,"stunting"]), min_value=0)
-                        if st.form_submit_button("Simpan Perubahan", type="primary"):
-                            load_data.clear()
-                            df_fresh = load_data()
-                            idx2 = df_fresh[(df_fresh["tahun"].astype(str)==t)&(df_fresh["bulan"]==b)&(df_fresh["posyandu"]==p)].index
-                            if len(idx2) > 0:
-                                df_fresh.loc[idx2[0],["sasaran","hadir","stunting"]] = [ns,nh,nst]
-                                df_fresh.loc[idx2[0],"waktu_input"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                ok, msg = save_data(df_fresh)
-                                if ok: st.success("Data berhasil diupdate!")
-                                else: st.error("Gagal: " + msg)
-                            st.rerun()
+                        if st.form_submit_button("💾 Simpan Perubahan", type="primary"):
+                            if nh > ns:
+                                st.error("❌ Hadir tidak boleh melebihi sasaran.")
+                            elif nst > nh:
+                                st.error("❌ Stunting tidak boleh melebihi hadir.")
+                            else:
+                                load_data.clear()
+                                df_f = load_data()
+                                idx2 = df_f[(df_f["tahun"].astype(str)==te)&
+                                            (df_f["bulan"]==be)&
+                                            (df_f["posyandu"]==pe)].index
+                                if len(idx2) > 0:
+                                    df_f.loc[idx2[0],["sasaran","hadir","stunting"]] = [ns,nh,nst]
+                                    df_f.loc[idx2[0],"waktu_input"] = \
+                                        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    ok, msg = save_data(df_f)
+                                    if ok: st.success("✅ Data berhasil diperbarui!")
+                                    else:  st.error(f"❌ Gagal: {msg}")
+                                st.rerun()
 
-    with tab2:
+    # ── TAB HAPUS ──
+    # Menggunakan st.session_state untuk menyimpan target hapus
+    # Tidak ada st.rerun() sebelum konfirmasi tampil
+    with t2:
         if df_akses.empty:
-            st.info("Tidak ada data yang dapat dihapus.")
+            abox("Belum ada data yang dapat dihapus.", "warn")
         else:
-            c1,c2,c3 = st.columns(3)
-            with c1: td = st.selectbox("Tahun", sorted(df_akses["tahun"].astype(str).unique()), key="td")
+            tahun_opts2 = sorted(df_akses["tahun"].dropna().astype(str).unique().tolist())
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                td = st.selectbox("Tahun", tahun_opts2, key="del_tahun")
             with c2:
-                bulan_tersedia2 = [x for x in BULAN_LIST if x in df_akses[df_akses["tahun"].astype(str)==td]["bulan"].values]
-                bd = st.selectbox("Bulan", bulan_tersedia2 if bulan_tersedia2 else BULAN_LIST[:1], key="bd")
+                bl_opts2 = [b for b in BULAN_LIST
+                            if b in df_akses[df_akses["tahun"].astype(str)==td]["bulan"].values]
+                bd = st.selectbox("Bulan", bl_opts2 or ["—"], key="del_bulan")
             with c3:
-                pos_tersedia2 = df_akses[(df_akses["tahun"].astype(str)==td)&(df_akses["bulan"]==bd)]["posyandu"].unique().tolist()
-                pd_sel = st.selectbox("Posyandu", pos_tersedia2 if pos_tersedia2 else ["—"], key="pdel")
+                ps_opts2 = df_akses[(df_akses["tahun"].astype(str)==td)&
+                                    (df_akses["bulan"]==bd)]["posyandu"].unique().tolist()
+                pd_sel = st.selectbox("Posyandu", ps_opts2 or ["—"], key="del_pos")
 
             if pd_sel and pd_sel != "—":
-                # Tampilkan detail data yang akan dihapus
-                row = df_akses[(df_akses["tahun"].astype(str)==td)&(df_akses["bulan"]==bd)&(df_akses["posyandu"]==pd_sel)]
+                row = df_akses[(df_akses["tahun"].astype(str)==td)&
+                               (df_akses["bulan"]==bd)&
+                               (df_akses["posyandu"]==pd_sel)]
                 if not row.empty:
                     r = row.iloc[0]
-                    st.markdown(
-                        "<div class='alert-box alert-warning'>"
-                        "Data yang akan dihapus:<br>"
-                        "<strong>" + str(r["posyandu"]) + "</strong> — " + str(r["bulan"]) + " " + str(r["tahun"]) + "<br>"
-                        "Sasaran: " + str(r["sasaran"]) + " | Hadir: " + str(r["hadir"]) + " | Stunting: " + str(r["stunting"]) + "<br>"
-                        "Diinput oleh: <strong>" + str(r["diinput_oleh"]) + "</strong>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
+                    abox(
+                        f"<b>Data yang dipilih:</b><br>"
+                        f"📍 {r['posyandu']} — {r['bulan']} {r['tahun']}<br>"
+                        f"👥 Sasaran: <b>{r['sasaran']}</b> &nbsp;|&nbsp; "
+                        f"Hadir: <b>{r['hadir']}</b> &nbsp;|&nbsp; "
+                        f"Stunting: <b>{r['stunting']}</b><br>"
+                        f"🔑 Diinput oleh: <b>{r['diinput_oleh']}</b>",
+                        "warn")
 
-                if "konfirm_hapus" not in st.session_state:
-                    st.session_state.konfirm_hapus = False
+                # Key unik untuk target hapus
+                hapus_key = f"{td}|{bd}|{pd_sel}"
 
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    if st.button("Hapus Data Ini", type="primary", use_container_width=True):
-                        st.session_state.konfirm_hapus = True
+                # Tampilkan tombol HAPUS
+                if not st.session_state.get("hapus_konfirm"):
+                    if st.button("🗑️ Hapus Data Ini", type="primary", key="btn_hapus"):
+                        st.session_state.hapus_target  = hapus_key
+                        st.session_state.hapus_konfirm = True
                         st.rerun()
 
-                if st.session_state.get("konfirm_hapus"):
-                    st.warning("Apakah Anda yakin ingin menghapus data ini? Tindakan ini tidak dapat dibatalkan.")
-                    col_c, col_d = st.columns(2)
-                    with col_c:
-                        if st.button("Ya, Hapus Permanen", type="primary", use_container_width=True):
+                # Tampilkan konfirmasi jika target sama
+                if (st.session_state.get("hapus_konfirm") and
+                        st.session_state.get("hapus_target") == hapus_key):
+                    abox("⚠️ <b>Konfirmasi Hapus</b> — Tindakan ini tidak dapat dibatalkan!", "red")
+                    cc, cd = st.columns(2)
+                    with cc:
+                        if st.button("✅ Ya, Hapus Permanen", type="primary", key="btn_konfirm_hapus"):
                             load_data.clear()
-                            df_fresh = load_data()
-                            df_fresh = df_fresh[~(
-                                (df_fresh["tahun"].astype(str)==td) &
-                                (df_fresh["bulan"]==bd) &
-                                (df_fresh["posyandu"]==pd_sel)
+                            df_f = load_data()
+                            df_f = df_f[~(
+                                (df_f["tahun"].astype(str)==td) &
+                                (df_f["bulan"]==bd) &
+                                (df_f["posyandu"]==pd_sel)
                             )].reset_index(drop=True)
-                            ok, msg = save_data(df_fresh)
+                            ok, msg = save_data(df_f)
+                            st.session_state.hapus_konfirm = False
+                            st.session_state.hapus_target  = None
                             if ok:
-                                st.session_state.konfirm_hapus = False
-                                st.success("Data berhasil dihapus!")
+                                st.success("✅ Data berhasil dihapus!")
                             else:
-                                st.error("Gagal: " + msg)
+                                st.error(f"❌ Gagal menghapus: {msg}")
                             st.rerun()
-                    with col_d:
-                        if st.button("Batal", use_container_width=True):
-                            st.session_state.konfirm_hapus = False
+                    with cd:
+                        if st.button("❌ Batal", key="btn_batal_hapus"):
+                            st.session_state.hapus_konfirm = False
+                            st.session_state.hapus_target  = None
                             st.rerun()
+
     return df
 
-# ─── MAIN ──────────────────────────────────────────────────────────────────────
+# ─── TEST KONEKSI ─────────────────────────────────────────────────────────────────
+def page_test():
+    render_header("Test Koneksi Google Sheets")
+    sec("Langkah 1 — Cek Secrets")
+    try:
+        sn = st.secrets["sheet_name"]
+        abox(f"✅ <b>sheet_name</b>: <code>{sn}</code>", "green")
+    except Exception as e:
+        abox(f"❌ Gagal baca sheet_name: {e}", "red")
+    try:
+        gcp = st.secrets["gcp_service_account"]
+        abox(f"✅ <b>gcp_service_account</b> OK. client_email: <code>{gcp.get('client_email','-')}</code>", "green")
+    except Exception as e:
+        abox(f"❌ Gagal baca gcp_service_account: {e}", "red")
+
+    sec("Langkah 2 — Cek Koneksi gspread")
+    gc, err = get_gc()
+    if gc:
+        abox("✅ Koneksi ke Google berhasil!", "green")
+    else:
+        abox(f"❌ Koneksi GAGAL: {err}", "red"); return
+
+    sec("Langkah 3 — Cek Spreadsheet")
+    try:
+        sh   = gc.open(st.secrets["sheet_name"])
+        tabs = [w.title for w in sh.worksheets()]
+        abox(f"✅ Spreadsheet <b>{sh.title}</b> ditemukan. Tab: {tabs}", "green")
+        if "data_stunting" not in tabs:
+            abox("⚠️ Sheet <b>data_stunting</b> tidak ditemukan.", "warn")
+        if "users" not in tabs:
+            abox("⚠️ Sheet <b>users</b> tidak ditemukan.", "warn")
+    except Exception as e:
+        abox(f"❌ Gagal buka spreadsheet: {e}", "red"); return
+
+    sec("Langkah 4 — Test Tulis Data")
+    if st.button("🧪 Test Simpan ke Sheets", type="primary"):
+        ws, err = get_ws("data_stunting")
+        if ws:
+            try:
+                ws.append_row(["TEST","Mei","5","Kel Test","Posyandu Test","10","8","1",
+                               "admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+                abox("✅ Berhasil tulis data! Cek tab data_stunting di Google Sheets.", "green")
+            except Exception as e:
+                abox(f"❌ Gagal tulis: {e}", "red")
+        else:
+            abox(f"❌ Tidak bisa buka sheet: {err}", "red")
+
+    if st.button("🗑️ Hapus Baris TEST"):
+        ws, _ = get_ws("data_stunting")
+        if ws:
+            try:
+                vals = ws.get_all_values()
+                for i, row in enumerate(vals):
+                    if row and row[0]=="TEST":
+                        ws.delete_rows(i+1)
+                        abox("✅ Baris TEST dihapus.", "green"); break
+            except Exception as e:
+                abox(f"❌ Gagal hapus: {e}", "red")
+
+# ─── MAIN ─────────────────────────────────────────────────────────────────────────
 def main():
     df = load_data()
+
     if st.session_state.is_public:
-        menu, tahun, bulan = render_sidebar(role="publik")
+        menu, tahun, bulan = render_sidebar("publik")
         page_dashboard(df, tahun, bulan, is_public=True)
         return
-    if not st.session_state.logged_in:
-        login_page(); return
-    user = st.session_state.user
-    role = user["role"]
-    menu, tahun, bulan = render_sidebar(role=role)
-    if menu=="Dashboard Utama": page_dashboard(df,tahun,bulan)
-    elif menu=="Input Data": df=page_input(df,user)
-    elif menu=="Import Google Sheets": df=page_import(df)
-    elif menu=="Analisis & Tren": page_analisis(df,tahun)
-    elif menu=="Laporan": page_laporan(df,tahun,bulan)
-    elif menu=="Kelola Pengguna":
-        if role=="admin": page_kelola_user()
-        else: st.error("Akses ditolak.")
-    elif menu=="Kelola Data":
-        if role in ["admin","pegawai"]: df=page_kelola_data(df,user)
-        else: st.error("Akses ditolak.")
 
+    if not st.session_state.logged_in:
+        login_page()
+        return
+
+    user = st.session_state.user
+    role = str(user.get("role","")).lower()
+    menu, tahun, bulan = render_sidebar(role)
+
+    if   menu == "📊 Dashboard Utama":  page_dashboard(df, tahun, bulan)
+    elif menu == "📋 Input Data":        df = page_input(df, user)
+    elif menu == "📤 Import CSV":         df = page_import(df)
+    elif menu == "📈 Analisis & Tren":   page_analisis(df, tahun)
+    elif menu == "📄 Laporan":           page_laporan(df, tahun, bulan)
+    elif menu == "👥 Kelola Pengguna":
+        if role == "admin": page_kelola_user()
+        else: st.error("❌ Akses ditolak.")
+    elif menu == "⚙️ Kelola Data":       df = page_kelola_data(df, user)
+    elif menu == "🔧 Test Koneksi":
+        if role == "admin": page_test()
+        else: st.error("❌ Akses ditolak.")
 
 if __name__ == "__main__":
     main()
