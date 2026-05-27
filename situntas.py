@@ -273,7 +273,7 @@ def render_sidebar(role="publik"):
         else:
             menu_opts = ["Dashboard Utama"]
             if role in ["pegawai","admin"]:
-                menu_opts += ["Input Data", "Import Google Sheets"]
+                menu_opts += ["Input Data", "Import Google Sheets", "Kelola Data"]
             if role == "admin":
                 menu_opts += ["Analisis & Tren", "Laporan", "Kelola Pengguna", "Kelola Data"]
             menu = st.radio("Navigasi", menu_opts, label_visibility="collapsed")
@@ -640,45 +640,117 @@ def page_kelola_user():
                     st.rerun()
 
 # ─── KELOLA DATA ───────────────────────────────────────────────────────────────
-def page_kelola_data(df):
+def page_kelola_data(df, user):
     render_header("Kelola Data")
-    tab1, tab2 = st.tabs(["Edit","Hapus"])
+    role = user["role"]
+
+    # Filter data sesuai hak akses
+    if role == "admin":
+        df_akses = df.copy()
+        st.markdown("<div class='alert-box'>Mode <strong>Admin</strong> — dapat mengedit dan menghapus semua data.</div>", unsafe_allow_html=True)
+    else:
+        df_akses = df[df["diinput_oleh"] == user["username"]].copy() if not df.empty else pd.DataFrame()
+        st.markdown("<div class='alert-box'>Mode <strong>Pegawai</strong> — hanya dapat mengedit/menghapus data yang Anda input sendiri.</div>", unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Edit Data", "Hapus Data"])
+
     with tab1:
-        if df.empty: st.info("Belum ada data.")
+        if df_akses.empty:
+            st.info("Tidak ada data yang dapat diedit.")
         else:
-            c1,c2,c3=st.columns(3)
-            with c1: t=st.selectbox("Tahun",sorted(df["tahun"].unique()),key="te")
-            with c2: b=st.selectbox("Bulan",[x for x in BULAN_LIST if x in df[df["tahun"]==t]["bulan"].values],key="be")
-            with c3: p=st.selectbox("Posyandu",df[(df["tahun"]==t)&(df["bulan"]==b)]["posyandu"].unique().tolist(),key="pe")
-            if p:
-                idx=df[(df["tahun"]==t)&(df["bulan"]==b)&(df["posyandu"]==p)].index
-                if len(idx)>0:
-                    i=idx[0]
+            c1,c2,c3 = st.columns(3)
+            with c1: t = st.selectbox("Tahun", sorted(df_akses["tahun"].astype(str).unique()), key="te")
+            with c2:
+                bulan_tersedia = [x for x in BULAN_LIST if x in df_akses[df_akses["tahun"].astype(str)==t]["bulan"].values]
+                b = st.selectbox("Bulan", bulan_tersedia if bulan_tersedia else BULAN_LIST[:1], key="be")
+            with c3:
+                pos_tersedia = df_akses[(df_akses["tahun"].astype(str)==t)&(df_akses["bulan"]==b)]["posyandu"].unique().tolist()
+                p = st.selectbox("Posyandu", pos_tersedia if pos_tersedia else ["—"], key="pe")
+
+            if p and p != "—":
+                idx = df[(df["tahun"].astype(str)==t)&(df["bulan"]==b)&(df["posyandu"]==p)].index
+                if len(idx) > 0:
+                    i = idx[0]
+                    # Info siapa yang input
+                    diinput = str(df.loc[i,"diinput_oleh"])
+                    st.markdown("<div class='alert-box'>Data diinput oleh: <strong>" + diinput + "</strong></div>", unsafe_allow_html=True)
                     with st.form("fe"):
-                        e1,e2,e3=st.columns(3)
-                        with e1: ns=st.number_input("Sasaran",value=int(df.loc[i,"sasaran"]),min_value=0)
-                        with e2: nh=st.number_input("Hadir",value=int(df.loc[i,"hadir"]),min_value=0)
-                        with e3: nst=st.number_input("Stunting",value=int(df.loc[i,"stunting"]),min_value=0)
-                        if st.form_submit_button("Update",type="primary"):
-                            df.loc[i,["sasaran","hadir","stunting"]]=[ns,nh,nst]
-                            df.loc[i,"waktu_input"]=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            ok, msg = save_data(df)
-                            if ok: st.success("Update berhasil!")
-                            else: st.error("Gagal: " + msg)
+                        e1,e2,e3 = st.columns(3)
+                        with e1: ns = st.number_input("Sasaran", value=int(df.loc[i,"sasaran"]), min_value=0)
+                        with e2: nh = st.number_input("Hadir", value=int(df.loc[i,"hadir"]), min_value=0)
+                        with e3: nst = st.number_input("Stunting", value=int(df.loc[i,"stunting"]), min_value=0)
+                        if st.form_submit_button("Simpan Perubahan", type="primary"):
+                            load_data.clear()
+                            df_fresh = load_data()
+                            idx2 = df_fresh[(df_fresh["tahun"].astype(str)==t)&(df_fresh["bulan"]==b)&(df_fresh["posyandu"]==p)].index
+                            if len(idx2) > 0:
+                                df_fresh.loc[idx2[0],["sasaran","hadir","stunting"]] = [ns,nh,nst]
+                                df_fresh.loc[idx2[0],"waktu_input"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                ok, msg = save_data(df_fresh)
+                                if ok: st.success("Data berhasil diupdate!")
+                                else: st.error("Gagal: " + msg)
                             st.rerun()
+
     with tab2:
-        if df.empty: st.info("Belum ada data.")
+        if df_akses.empty:
+            st.info("Tidak ada data yang dapat dihapus.")
         else:
-            c1,c2,c3=st.columns(3)
-            with c1: td=st.selectbox("Tahun",sorted(df["tahun"].unique()),key="td")
-            with c2: bd=st.selectbox("Bulan",[x for x in BULAN_LIST if x in df[df["tahun"]==td]["bulan"].values],key="bd")
-            with c3: pd_sel=st.selectbox("Posyandu",df[(df["tahun"]==td)&(df["bulan"]==bd)]["posyandu"].unique().tolist(),key="pd")
-            if st.checkbox("Yakin hapus?") and st.button("Hapus",type="primary"):
-                df=df[~((df["tahun"]==td)&(df["bulan"]==bd)&(df["posyandu"]==pd_sel))].reset_index(drop=True)
-                ok, msg = save_data(df)
-                if ok: st.success("Data berhasil dihapus!")
-                else: st.error("Gagal: " + msg)
-                st.rerun()
+            c1,c2,c3 = st.columns(3)
+            with c1: td = st.selectbox("Tahun", sorted(df_akses["tahun"].astype(str).unique()), key="td")
+            with c2:
+                bulan_tersedia2 = [x for x in BULAN_LIST if x in df_akses[df_akses["tahun"].astype(str)==td]["bulan"].values]
+                bd = st.selectbox("Bulan", bulan_tersedia2 if bulan_tersedia2 else BULAN_LIST[:1], key="bd")
+            with c3:
+                pos_tersedia2 = df_akses[(df_akses["tahun"].astype(str)==td)&(df_akses["bulan"]==bd)]["posyandu"].unique().tolist()
+                pd_sel = st.selectbox("Posyandu", pos_tersedia2 if pos_tersedia2 else ["—"], key="pdel")
+
+            if pd_sel and pd_sel != "—":
+                # Tampilkan detail data yang akan dihapus
+                row = df_akses[(df_akses["tahun"].astype(str)==td)&(df_akses["bulan"]==bd)&(df_akses["posyandu"]==pd_sel)]
+                if not row.empty:
+                    r = row.iloc[0]
+                    st.markdown(
+                        "<div class='alert-box alert-warning'>"
+                        "Data yang akan dihapus:<br>"
+                        "<strong>" + str(r["posyandu"]) + "</strong> — " + str(r["bulan"]) + " " + str(r["tahun"]) + "<br>"
+                        "Sasaran: " + str(r["sasaran"]) + " | Hadir: " + str(r["hadir"]) + " | Stunting: " + str(r["stunting"]) + "<br>"
+                        "Diinput oleh: <strong>" + str(r["diinput_oleh"]) + "</strong>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+
+                if "konfirm_hapus" not in st.session_state:
+                    st.session_state.konfirm_hapus = False
+
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button("Hapus Data Ini", type="primary", use_container_width=True):
+                        st.session_state.konfirm_hapus = True
+                        st.rerun()
+
+                if st.session_state.get("konfirm_hapus"):
+                    st.warning("Apakah Anda yakin ingin menghapus data ini? Tindakan ini tidak dapat dibatalkan.")
+                    col_c, col_d = st.columns(2)
+                    with col_c:
+                        if st.button("Ya, Hapus Permanen", type="primary", use_container_width=True):
+                            load_data.clear()
+                            df_fresh = load_data()
+                            df_fresh = df_fresh[~(
+                                (df_fresh["tahun"].astype(str)==td) &
+                                (df_fresh["bulan"]==bd) &
+                                (df_fresh["posyandu"]==pd_sel)
+                            )].reset_index(drop=True)
+                            ok, msg = save_data(df_fresh)
+                            if ok:
+                                st.session_state.konfirm_hapus = False
+                                st.success("Data berhasil dihapus!")
+                            else:
+                                st.error("Gagal: " + msg)
+                            st.rerun()
+                    with col_d:
+                        if st.button("Batal", use_container_width=True):
+                            st.session_state.konfirm_hapus = False
+                            st.rerun()
     return df
 
 # ─── MAIN ──────────────────────────────────────────────────────────────────────
@@ -702,7 +774,7 @@ def main():
         if role=="admin": page_kelola_user()
         else: st.error("Akses ditolak.")
     elif menu=="Kelola Data":
-        if role=="admin": df=page_kelola_data(df)
+        if role in ["admin","pegawai"]: df=page_kelola_data(df,user)
         else: st.error("Akses ditolak.")
 
 
