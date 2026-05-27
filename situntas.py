@@ -123,7 +123,9 @@ def save_users(df):
 
 def verify_user(username, password):
     users = load_users()
-    user = users[(users["username"]==username) & (users["aktif"]==True)]
+    # aktif bisa berupa bool True atau string "TRUE" / "True" dari Google Sheets
+    users["_aktif"] = users["aktif"].astype(str).str.upper().isin(["TRUE","1","YES"])
+    user = users[(users["username"]==username) & (users["_aktif"]==True)]
     if user.empty: return None
     if str(user.iloc[0]["password"]) == hash_pw(password):
         return user.iloc[0].to_dict()
