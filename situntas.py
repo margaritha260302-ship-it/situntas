@@ -87,14 +87,22 @@ def load_data():
 def save_data(df):
     load_data.clear()
     ws, err = get_ws("data_stunting")
-    if ws:
-        try:
-            ws.clear()
-            ws.update([df.columns.tolist()] + df.astype(str).values.tolist())
-            return True, "OK"
-        except Exception as e:
-            return False, str(e)
-    return False, str(err)
+    if ws is None:
+        return False, f"Tidak bisa konek ke Google Sheets: {err}"
+    try:
+        rows = [df.columns.tolist()] + df.astype(str).values.tolist()
+        ws.clear()
+        import time; time.sleep(0.5)   # beri jeda agar clear selesai
+        ws.update(rows)
+        # Verifikasi: baca balik jumlah baris
+        import time; time.sleep(0.5)
+        after = ws.get_all_values()
+        expected = len(df) + 1  # +1 header
+        if len(after) != expected:
+            return False, f"Verifikasi gagal: diharapkan {expected} baris, terbaca {len(after)} baris"
+        return True, f"OK — {len(df)} baris tersimpan"
+    except Exception as e:
+        return False, str(e)
 
 @st.cache_data(ttl=30)
 def load_users():
@@ -1013,7 +1021,68 @@ def page_kelola_data(df, user):
 
 # ─── TEST KONEKSI ─────────────────────────────────────────────────────────────────
 def page_test():
-    render_header("Test Koneksi Google Sheets")
+    render_header("Diagnostik & Test Koneksi")
+
+    sec("🔍 Isi Google Sheets Saat Ini (Real-time, Tanpa Cache)")
+    abox("Klik tombol ini untuk membaca LANGSUNG dari Google Sheets tanpa cache — "
+         "ini membuktikan apakah data benar-benar sudah terhapus atau masih ada.")
+    if st.button("📥 Baca Isi Google Sheets SEKARANG", type="primary", use_container_width=True):
+        ws, err = get_ws("data_stunting")
+        if ws:
+            try:
+                vals = ws.get_all_values()
+                n_data = len(vals) - 1  # kurangi header
+                abox(f"✅ Google Sheets berisi <b>{n_data}</b> baris data (+ 1 header = {len(vals)} total).", "green")
+                if n_data <= 0:
+                    abox("Sheet kosong atau hanya berisi header.", "warn")
+                else:
+                    df_raw = pd.DataFrame(vals[1:], columns=vals[0])
+                    st.dataframe(df_raw, use_container_width=True, hide_index=True)
+            except Exception as e:
+                abox(f"❌ Gagal baca: {e}", "red")
+        else:
+            abox(f"❌ Tidak bisa konek: {err}", "red")
+
+    st.markdown("---")
+    sec("🚨 Hapus Darurat — Kosongkan Semua Data")
+    abox("⚠️ Gunakan ini jika data yang sudah dihapus terus muncul lagi. "
+         "Akan menghapus <b>SEMUA</b> baris data stunting dan menyisakan header saja.", "red")
+
+    if "konfirm_kosongkan" not in st.session_state:
+        st.session_state.konfirm_kosongkan = False
+
+    if not st.session_state.get("konfirm_kosongkan"):
+        if st.button("🧹 Kosongkan Semua Data Stunting", use_container_width=True):
+            st.session_state.konfirm_kosongkan = True
+            st.rerun()
+    else:
+        abox("⚠️ <b>PERINGATAN KERAS</b> — Semua data akan DIHAPUS PERMANEN dari Google Sheets!", "red")
+        cc, cd = st.columns(2)
+        with cc:
+            if st.button("✅ Ya, Kosongkan Sekarang", type="primary", use_container_width=True):
+                ws, err = get_ws("data_stunting")
+                if ws:
+                    try:
+                        import time
+                        HEADER = ["tahun","bulan","bulan_ke","wilayah","posyandu",
+                                  "sasaran","hadir","stunting","diinput_oleh","waktu_input"]
+                        ws.clear()
+                        time.sleep(0.8)
+                        ws.update([HEADER])
+                        load_data.clear()
+                        st.session_state.konfirm_kosongkan = False
+                        abox("✅ Sheet berhasil dikosongkan. Input ulang data yang benar.", "green")
+                        st.rerun()
+                    except Exception as e:
+                        abox(f"❌ Gagal: {e}", "red")
+                else:
+                    abox(f"❌ Tidak bisa konek: {err}", "red")
+        with cd:
+            if st.button("❌ Batal", use_container_width=True):
+                st.session_state.konfirm_kosongkan = False
+                st.rerun()
+
+    st.markdown("---")
     sec("Langkah 1 — Cek Secrets")
     try:
         sn = st.secrets["sheet_name"]
@@ -1033,31 +1102,33 @@ def page_test():
     else:
         abox(f"❌ Koneksi GAGAL: {err}", "red"); return
 
-    sec("Langkah 3 — Cek Spreadsheet")
+    sec("Langkah 3 — Cek Spreadsheet & Jumlah Baris")
     try:
         sh   = gc.open(st.secrets["sheet_name"])
         tabs = [w.title for w in sh.worksheets()]
-        abox(f"✅ Spreadsheet <b>{sh.title}</b> ditemukan. Tab: {tabs}", "green")
-        if "data_stunting" not in tabs:
-            abox("⚠️ Sheet <b>data_stunting</b> tidak ditemukan.", "warn")
-        if "users" not in tabs:
-            abox("⚠️ Sheet <b>users</b> tidak ditemukan.", "warn")
+        abox(f"✅ Spreadsheet <b>{sh.title}</b>. Tab: {tabs}", "green")
+        for tab_name in ["data_stunting", "users"]:
+            if tab_name in tabs:
+                _ws   = sh.worksheet(tab_name)
+                _vals = _ws.get_all_values()
+                abox(f"📊 Sheet <b>{tab_name}</b>: {len(_vals)-1} baris data", "green")
+            else:
+                abox(f"⚠️ Sheet <b>{tab_name}</b> tidak ditemukan!", "warn")
     except Exception as e:
         abox(f"❌ Gagal buka spreadsheet: {e}", "red"); return
 
-    sec("Langkah 4 — Test Tulis Data")
-    if st.button("🧪 Test Simpan ke Sheets", type="primary"):
+    sec("Langkah 4 — Test Tulis & Hapus")
+    if st.button("🧪 Test Simpan 1 Baris", type="primary"):
         ws, err = get_ws("data_stunting")
         if ws:
             try:
                 ws.append_row(["TEST","Mei","5","Kel Test","Posyandu Test","10","8","1",
                                "admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-                abox("✅ Berhasil tulis data! Cek tab data_stunting di Google Sheets.", "green")
+                abox("✅ Berhasil tulis data test!", "green")
             except Exception as e:
                 abox(f"❌ Gagal tulis: {e}", "red")
         else:
             abox(f"❌ Tidak bisa buka sheet: {err}", "red")
-
     if st.button("🗑️ Hapus Baris TEST"):
         ws, _ = get_ws("data_stunting")
         if ws:
@@ -1069,7 +1140,6 @@ def page_test():
                         abox("✅ Baris TEST dihapus.", "green"); break
             except Exception as e:
                 abox(f"❌ Gagal hapus: {e}", "red")
-
 # ─── MAIN ─────────────────────────────────────────────────────────────────────────
 def main():
     df = load_data()
