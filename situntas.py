@@ -275,7 +275,7 @@ def render_sidebar(role="publik"):
             if role in ["pegawai","admin"]:
                 menu_opts += ["Input Data", "Import Google Sheets"]
             if role == "admin":
-                menu_opts += ["Analisis & Tren", "Laporan", "Kelola Pengguna", "Kelola Data", "Test Koneksi"]
+                menu_opts += ["Analisis & Tren", "Laporan", "Kelola Pengguna", "Kelola Data"]
             menu = st.radio("Navigasi", menu_opts, label_visibility="collapsed")
 
         st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:1rem 0;'>", unsafe_allow_html=True)
@@ -704,8 +704,7 @@ def main():
     elif menu=="Kelola Data":
         if role=="admin": df=page_kelola_data(df)
         else: st.error("Akses ditolak.")
-    elif menu=="Test Koneksi":
-        if role=="admin": page_test_koneksi()
+
 
 if __name__ == "__main__":
     main()
