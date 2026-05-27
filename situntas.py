@@ -12,7 +12,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ─── KONSTANTA ─────────────────────────────────────────────────────────────────
 WILAYAH = {
     "Kelurahan Kota SoE": ["Posyandu Mawar I", "Posyandu Mawar II", "Posyandu Mawar III"],
     "Kelurahan Karang Siri": ["Posyandu Melati I", "Posyandu Melati II", "Posyandu Melati III"],
@@ -37,32 +36,36 @@ def get_bulan_ke(b): return BULAN_LIST.index(b) + 1
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 
 # ─── GOOGLE SHEETS CONNECTION ──────────────────────────────────────────────────
-@st.cache_resource
 def get_gsheet_client():
+    """Tidak pakai cache supaya koneksi selalu fresh"""
     try:
         import gspread
         from google.oauth2.service_account import Credentials
         scopes = ["https://spreadsheets.google.com/feeds",
                   "https://www.googleapis.com/auth/drive"]
-        creds_dict = st.secrets["gcp_service_account"]
-        creds = Credentials.from_service_account_info(dict(creds_dict), scopes=scopes)
-        return gspread.authorize(creds)
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        client = gspread.authorize(creds)
+        return client, None
     except Exception as e:
-        return None
+        return None, str(e)
 
 def get_sheet(name):
     try:
-        gc = get_gsheet_client()
-        if gc is None: return None
-        sh = gc.open(st.secrets["sheet_name"])
-        return sh.worksheet(name)
-    except:
-        return None
+        gc, err = get_gsheet_client()
+        if gc is None:
+            return None, "Gagal konek: " + str(err)
+        sheet_name = st.secrets["sheet_name"]
+        sh = gc.open(sheet_name)
+        ws = sh.worksheet(name)
+        return ws, None
+    except Exception as e:
+        return None, str(e)
 
 # ─── DATA FUNCTIONS ────────────────────────────────────────────────────────────
 @st.cache_data(ttl=30)
 def load_data():
-    ws = get_sheet("data_stunting")
+    ws, err = get_sheet("data_stunting")
     if ws:
         try:
             records = ws.get_all_records()
@@ -79,22 +82,20 @@ def load_data():
 
 def save_data(df):
     load_data.clear()
-    ws = get_sheet("data_stunting")
+    ws, err = get_sheet("data_stunting")
     if ws:
         try:
+            data_to_write = [df.columns.tolist()] + df.astype(str).values.tolist()
             ws.clear()
-            # Memastikan semua data diubah ke format string/list agar gspread menerimanya dengan aman
-            isi_data = [df.columns.tolist()] + df.astype(str).values.tolist()
-            ws.update(isi_data)
-            return
+            ws.update(data_to_write)
+            return True, "OK"
         except Exception as e:
-            # Anda bisa melihat error di log Streamlit Cloud jika ini gagal
-            st.sidebar.error(f"Gagal simpan ke Sheets: {e}") 
-    df.to_csv("data_situntas.csv", index=False)
+            return False, str(e)
+    return False, "Tidak bisa konek ke sheet data_stunting: " + str(err)
 
 @st.cache_data(ttl=30)
 def load_users():
-    ws = get_sheet("users")
+    ws, err = get_sheet("users")
     if ws:
         try:
             records = ws.get_all_records()
@@ -104,21 +105,21 @@ def load_users():
         return pd.read_csv("users_situntas.csv")
     df = pd.DataFrame([
         {"username":"admin","password":hash_pw("situntas2025"),"nama":"Administrator","role":"admin","wilayah":"semua","aktif":True},
-        {"username":"pegawai01","password":hash_pw("pegawai123"),"nama":"Pegawai 1","role":"pegawai","wilayah":"Kelurahan Kota SoE","aktif":True},
     ])
     save_users(df)
     return df
 
 def save_users(df):
     load_users.clear()
-    ws = get_sheet("users")
+    ws, err = get_sheet("users")
     if ws:
         try:
             ws.clear()
             ws.update([df.columns.tolist()] + df.astype(str).values.tolist())
-            return
-        except: pass
-    df.to_csv("users_situntas.csv", index=False)
+            return True, "OK"
+        except Exception as e:
+            return False, str(e)
+    return False, str(err)
 
 def verify_user(username, password):
     users = load_users()
@@ -138,7 +139,7 @@ st.markdown("""
 [data-testid="stSidebar"] * { color: #FFFFFF !important; }
 [data-testid="stSidebar"] .stRadio label { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:10px 14px; margin:3px 0; display:block; }
 [data-testid="stSidebar"] .stRadio label:hover { background:rgba(255,255,255,0.18); }
-.situntas-header { background:linear-gradient(135deg,#1565C0,#1976D2,#42A5F5); border-radius:20px; padding:1.8rem 2.5rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:1.5rem; box-shadow:0 8px 32px rgba(21,101,192,0.25); position:relative; overflow:hidden; }
+.situntas-header { background:linear-gradient(135deg,#1565C0,#1976D2,#42A5F5); border-radius:20px; padding:1.8rem 2.5rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:1.5rem; box-shadow:0 8px 32px rgba(21,101,192,0.25); }
 .header-badge { display:inline-block; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.35); color:#FFFFFF; font-size:0.7rem; font-weight:700; letter-spacing:2px; text-transform:uppercase; padding:3px 12px; border-radius:20px; margin-bottom:0.7rem; }
 .header-title { font-family:'Nunito',sans-serif; font-size:2rem; font-weight:900; color:#FFFFFF; margin:0; line-height:1.2; }
 .header-sub { color:rgba(255,255,255,0.85); font-size:0.88rem; margin:0.3rem 0 0; }
@@ -157,7 +158,6 @@ st.markdown("""
 .metric-delta-up { color:#E53935; font-size:0.78rem; font-weight:700; }
 .metric-delta-down { color:#43A047; font-size:0.78rem; font-weight:700; }
 .section-title { color:#1565C0; font-size:1rem; font-weight:700; margin:1.5rem 0 0.8rem; padding-bottom:0.5rem; border-bottom:2px solid rgba(21,101,192,0.15); display:flex; align-items:center; gap:8px; }
-.section-title span { color:#1976D2; }
 .alert-box { background:rgba(21,101,192,0.07); border:1px solid rgba(21,101,192,0.2); border-left:4px solid #1976D2; border-radius:10px; padding:0.9rem 1.2rem; color:#1565C0; font-size:0.87rem; margin-bottom:1rem; }
 .alert-warning { background:rgba(255,152,0,0.07); border-color:rgba(255,152,0,0.25); border-left-color:#FB8C00; color:#E65100; }
 .chart-container { background:#FFFFFF; border-radius:16px; padding:1.2rem; margin-bottom:1rem; box-shadow:0 4px 16px rgba(21,101,192,0.08); }
@@ -170,9 +170,6 @@ st.markdown("""
 label { color:#1565C0 !important; font-size:0.85rem !important; font-weight:600 !important; }
 p, div { color:#1A237E; }
 h1,h2,h3 { color:#1565C0 !important; }
-::-webkit-scrollbar { width:6px; }
-::-webkit-scrollbar-track { background:#E3F2FD; }
-::-webkit-scrollbar-thumb { background:rgba(21,101,192,0.3); border-radius:3px; }
 .stTabs [data-baseweb="tab-list"] { background:rgba(255,255,255,0.6); border-radius:10px; padding:4px; }
 .stTabs [data-baseweb="tab"] { border-radius:8px; color:#1565C0 !important; font-weight:600; }
 .stTabs [aria-selected="true"] { background:#1976D2 !important; color:white !important; }
@@ -189,26 +186,21 @@ PLOT_LAYOUT = dict(
     legend=dict(bgcolor='rgba(255,255,255,0.9)', bordercolor='rgba(21,101,192,0.2)', borderwidth=1, font=dict(color='#1A237E')),
 )
 
-# ─── SESSION STATE ──────────────────────────────────────────────────────────────
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user = None
     st.session_state.is_public = False
 
-# ─── LOGO HELPER ───────────────────────────────────────────────────────────────
 def get_logo_b64():
     if os.path.exists(LOGO_PATH):
         with open(LOGO_PATH, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return None
 
-# ─── RENDER HEADER ─────────────────────────────────────────────────────────────
 def render_header(subtitle=""):
     logo_b64 = get_logo_b64()
     logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="width:80px;height:80px;object-fit:contain;border-radius:12px;background:white;padding:6px;flex-shrink:0;">' if logo_b64 else '<div style="font-size:3rem;">&#x1F3E5;</div>'
-    subtitle_html = ""
-    if subtitle:
-        subtitle_html = f'<br><span style="color:rgba(255,255,255,0.85);font-size:0.82rem;font-style:italic;">{subtitle}</span>'
+    subtitle_html = f'<br><span style="color:rgba(255,255,255,0.85);font-size:0.82rem;font-style:italic;">{subtitle}</span>' if subtitle else ""
     st.markdown(f"""
     <div class="situntas-header">
         {logo_html}
@@ -221,7 +213,6 @@ def render_header(subtitle=""):
     </div>
     """, unsafe_allow_html=True)
 
-# ─── LOGIN PAGE ─────────────────────────────────────────────────────────────────
 def login_page():
     col1, col2, col3 = st.columns([1, 1.4, 1])
     with col2:
@@ -257,7 +248,6 @@ def login_page():
                 st.rerun()
         st.markdown("<div style='text-align:center;font-size:0.75rem;color:#90A4AE;margin-top:1rem;padding-bottom:2rem;'>2026 Kecamatan Kota SoE &middot; Dikembangkan oleh Margaritha Liufeto, S.H</div>", unsafe_allow_html=True)
 
-# ─── SIDEBAR ────────────────────────────────────────────────────────────────────
 def render_sidebar(role="publik"):
     with st.sidebar:
         logo_b64 = get_logo_b64()
@@ -270,12 +260,10 @@ def render_sidebar(role="publik"):
             </div>
             <hr style='border-color:rgba(255,255,255,0.15);margin:0 0 1rem;'>
             """, unsafe_allow_html=True)
-        else:
-            st.markdown("<div><div style='font-size:2.2rem;'>&#x1F3E5;</div><div class='sidebar-title'>SITUNTAS</div><div class='sidebar-sub'>Kecamatan Kota SoE</div></div>", unsafe_allow_html=True)
 
         if role == "publik":
             menu = "Dashboard Publik"
-            st.markdown("<div style='padding:0.5rem 1rem;background:rgba(255,255,255,0.15);border-radius:8px;margin-bottom:1rem;'><span style='color:#FFFFFF;font-size:0.8rem;'>Mode Publik — Akses Terbatas</span></div>", unsafe_allow_html=True)
+            st.markdown("<div style='padding:0.5rem 1rem;background:rgba(255,255,255,0.15);border-radius:8px;margin-bottom:1rem;'><span style='color:#FFFFFF;font-size:0.8rem;'>Mode Publik</span></div>", unsafe_allow_html=True)
             if st.button("Login sebagai Pegawai", use_container_width=True):
                 st.session_state.is_public = False
                 st.session_state.logged_in = False
@@ -285,7 +273,7 @@ def render_sidebar(role="publik"):
             if role in ["pegawai","admin"]:
                 menu_opts += ["Input Data", "Import Google Sheets"]
             if role == "admin":
-                menu_opts += ["Analisis & Tren", "Laporan", "Kelola Pengguna", "Kelola Data"]
+                menu_opts += ["Analisis & Tren", "Laporan", "Kelola Pengguna", "Kelola Data", "Test Koneksi"]
             menu = st.radio("Navigasi", menu_opts, label_visibility="collapsed")
 
         st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:1rem 0;'>", unsafe_allow_html=True)
@@ -312,11 +300,92 @@ def render_sidebar(role="publik"):
                 st.rerun()
     return menu, tahun, bulan
 
+# ─── TEST KONEKSI (halaman debug) ──────────────────────────────────────────────
+def page_test_koneksi():
+    render_header("Test Koneksi Google Sheets")
+    st.markdown("### Diagnostik Koneksi")
+
+    # Test 1: secrets
+    st.markdown("**1. Cek Secrets**")
+    try:
+        sn = st.secrets["sheet_name"]
+        st.success("sheet_name = " + sn)
+    except Exception as e:
+        st.error("GAGAL baca sheet_name: " + str(e))
+
+    try:
+        gcp = st.secrets["gcp_service_account"]
+        st.success("gcp_service_account ditemukan, client_email = " + str(gcp.get("client_email","-")))
+    except Exception as e:
+        st.error("GAGAL baca gcp_service_account: " + str(e))
+
+    # Test 2: koneksi gspread
+    st.markdown("**2. Cek Koneksi gspread**")
+    gc, err = get_gsheet_client()
+    if gc:
+        st.success("Koneksi gspread berhasil!")
+    else:
+        st.error("Koneksi GAGAL: " + str(err))
+        return
+
+    # Test 3: buka spreadsheet
+    st.markdown("**3. Cek Buka Spreadsheet**")
+    try:
+        sh = gc.open(st.secrets["sheet_name"])
+        st.success("Spreadsheet ditemukan: " + sh.title)
+        worksheets = [ws.title for ws in sh.worksheets()]
+        st.info("Sheet yang ada: " + str(worksheets))
+    except Exception as e:
+        st.error("GAGAL buka spreadsheet: " + str(e))
+        return
+
+    # Test 4: buka sheet data_stunting
+    st.markdown("**4. Cek Sheet data_stunting**")
+    ws, err = get_sheet("data_stunting")
+    if ws:
+        st.success("Sheet data_stunting berhasil dibuka!")
+        try:
+            vals = ws.get_all_values()
+            st.info("Baris di sheet: " + str(len(vals)) + " baris. Header: " + str(vals[0] if vals else "kosong"))
+        except Exception as e:
+            st.error("Gagal baca: " + str(e))
+    else:
+        st.error("GAGAL buka data_stunting: " + str(err))
+
+    # Test 5: tulis data test
+    st.markdown("**5. Test Tulis Data**")
+    if st.button("Klik untuk Test Simpan 1 Baris Data", type="primary"):
+        ws, err = get_sheet("data_stunting")
+        if ws:
+            try:
+                test_row = ["TEST", "Mei", "5", "Kelurahan Test", "Posyandu Test",
+                            "10", "8", "1", "admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
+                ws.append_row(test_row)
+                st.success("BERHASIL tulis data test! Cek Google Sheets sekarang.")
+            except Exception as e:
+                st.error("GAGAL tulis: " + str(e))
+        else:
+            st.error("Tidak bisa buka sheet: " + str(err))
+
+    st.markdown("**6. Hapus Data Test**")
+    if st.button("Hapus baris TEST dari Sheets"):
+        ws, err = get_sheet("data_stunting")
+        if ws:
+            try:
+                vals = ws.get_all_values()
+                for i, row in enumerate(vals):
+                    if row and row[0] == "TEST":
+                        ws.delete_rows(i+1)
+                        st.success("Baris TEST berhasil dihapus.")
+                        break
+            except Exception as e:
+                st.error("Gagal hapus: " + str(e))
+
 # ─── DASHBOARD ──────────────────────────────────────────────────────────────────
 def page_dashboard(df, tahun, bulan, is_public=False):
     render_header()
     if is_public:
-        st.markdown("<div class='public-banner'><strong>Dashboard Publik</strong> — Data ditampilkan secara terbuka untuk transparansi. Login diperlukan untuk fitur lainnya.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='public-banner'><strong>Dashboard Publik</strong> — Login diperlukan untuk fitur lainnya.</div>", unsafe_allow_html=True)
 
     bulan_ke = get_bulan_ke(bulan)
     df_bulan = df[(df["tahun"]==tahun) & (df["bulan"]==bulan)] if not df.empty else pd.DataFrame()
@@ -364,7 +433,6 @@ def page_dashboard(df, tahun, bulan, is_public=False):
     df_wil = df_wil.sort_values("stunting", ascending=True)
     warna_map = {"Naik":"#E53935","Turun":"#43A047","Tetap":"#FB8C00","Data Awal":"#1976D2"}
 
-    st.markdown("<div class='section-title'><span>|</span> Kasus Stunting per Kelurahan/Desa — " + bulan + " " + str(tahun) + "</div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
@@ -375,7 +443,6 @@ def page_dashboard(df, tahun, bulan, is_public=False):
         fig.update_layout(title=dict(text="Stunting per Wilayah",font=dict(color="#1A237E",size=14),x=0),height=450,**PLOT_LAYOUT)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
         st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("<div style='font-size:0.78rem;color:#607D8B;'>Merah: Naik &nbsp;|&nbsp; Hijau: Turun &nbsp;|&nbsp; Kuning: Tetap &nbsp;|&nbsp; Biru: Data Awal</div>", unsafe_allow_html=True)
 
     with col2:
         st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
@@ -399,10 +466,8 @@ def page_input(df, user):
         info_wilayah = "Akses semua wilayah."
     else:
         info_wilayah = "Wilayah: <strong>" + str(user["wilayah"]) + "</strong>"
-    st.markdown(
-        "<div class='alert-box'>Login sebagai <strong>" + str(user["nama"]) + "</strong>. " + info_wilayah + "</div>",
-        unsafe_allow_html=True
-    )
+    st.markdown("<div class='alert-box'>Login sebagai <strong>" + str(user["nama"]) + "</strong>. " + info_wilayah + "</div>", unsafe_allow_html=True)
+
     wilayah_opts = list(WILAYAH.keys()) if user["role"]=="admin" else [user["wilayah"]]
     with st.form("form_input", clear_on_submit=True):
         col1, col2 = st.columns(2)
@@ -415,21 +480,31 @@ def page_input(df, user):
             sasaran_in = st.number_input("Total Sasaran *", min_value=0, step=1)
             hadir_in = st.number_input("Jumlah Kehadiran *", min_value=0, step=1)
         stunting_in = st.number_input("Jumlah Kasus Stunting *", min_value=0, step=1)
-        if st.form_submit_button("SIMPAN DATA", use_container_width=True, type="primary"):
-            if sasaran_in == 0:
-                st.error("Total sasaran tidak boleh 0.")
-            elif hadir_in > sasaran_in:
-                st.error("Kehadiran tidak boleh melebihi sasaran.")
+        submitted = st.form_submit_button("SIMPAN DATA", use_container_width=True, type="primary")
+
+    if submitted:
+        if sasaran_in == 0:
+            st.error("Total sasaran tidak boleh 0.")
+        elif hadir_in > sasaran_in:
+            st.error("Kehadiran tidak boleh melebihi sasaran.")
+        else:
+            cek = df[(df["tahun"]==tahun_in)&(df["bulan"]==bulan_in)&(df["posyandu"]==posyandu_in)] if not df.empty else pd.DataFrame()
+            if not cek.empty:
+                st.warning("Data " + posyandu_in + " — " + bulan_in + " " + str(tahun_in) + " sudah ada.")
             else:
-                cek = df[(df["tahun"]==tahun_in)&(df["bulan"]==bulan_in)&(df["posyandu"]==posyandu_in)] if not df.empty else pd.DataFrame()
-                if not cek.empty:
-                    st.warning("Data " + posyandu_in + " — " + bulan_in + " " + str(tahun_in) + " sudah ada.")
-                else:
-                    new_row = {"tahun":tahun_in,"bulan":bulan_in,"bulan_ke":get_bulan_ke(bulan_in),"wilayah":wilayah_in,"posyandu":posyandu_in,"sasaran":sasaran_in,"hadir":hadir_in,"stunting":stunting_in,"diinput_oleh":user["username"],"waktu_input":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                    save_data(df)
+                new_row = {"tahun":tahun_in,"bulan":bulan_in,"bulan_ke":get_bulan_ke(bulan_in),
+                           "wilayah":wilayah_in,"posyandu":posyandu_in,"sasaran":sasaran_in,
+                           "hadir":hadir_in,"stunting":stunting_in,"diinput_oleh":user["username"],
+                           "waktu_input":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                ok, msg = save_data(df)
+                if ok:
                     st.success("Data " + posyandu_in + " — " + bulan_in + " " + str(tahun_in) + " berhasil disimpan!")
-                    st.rerun()
+                else:
+                    st.error("GAGAL simpan ke Google Sheets: " + msg)
+                    st.info("Data tersimpan sementara di memori sesi ini.")
+                st.rerun()
+
     st.markdown("<div class='section-title'><span>|</span> Data Terbaru</div>", unsafe_allow_html=True)
     if not df.empty:
         st.dataframe(df.sort_values("waktu_input",ascending=False).head(10), use_container_width=True, hide_index=True)
@@ -450,8 +525,11 @@ def page_import(df):
                 df_import["diinput_oleh"] = "import"
                 df_import["waktu_input"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 df = pd.concat([df, df_import], ignore_index=True).drop_duplicates(subset=["tahun","bulan","posyandu"],keep="last")
-                save_data(df)
-                st.success(str(len(df_import)) + " data berhasil diimport!")
+                ok, msg = save_data(df)
+                if ok:
+                    st.success(str(len(df_import)) + " data berhasil diimport!")
+                else:
+                    st.error("Gagal simpan: " + msg)
                 st.rerun()
         except Exception as e:
             st.error("Error: " + str(e))
@@ -469,13 +547,13 @@ def page_analisis(df, tahun):
     tab1, tab2 = st.tabs(["Tren Stunting","Tren Kehadiran"])
     with tab1:
         st.markdown("<div class='chart-container'>",unsafe_allow_html=True)
-        fig = go.Figure(go.Scatter(x=df_agg["bulan"],y=df_agg["stunting"],mode="lines+markers",line=dict(color="#E53935",width=3),marker=dict(size=10,color="#E53935",line=dict(color="#FFFFFF",width=2)),fill="tozeroy",fillcolor="rgba(229,57,53,0.08)",hovertemplate="<b>%{x}</b><br>Stunting: <b>%{y}</b><extra></extra>"))
+        fig = go.Figure(go.Scatter(x=df_agg["bulan"],y=df_agg["stunting"],mode="lines+markers",line=dict(color="#E53935",width=3),marker=dict(size=10,color="#E53935",line=dict(color="#FFFFFF",width=2)),fill="tozeroy",fillcolor="rgba(229,57,53,0.08)"))
         fig.update_layout(title=dict(text="Tren Stunting " + str(tahun),font=dict(color="#1A237E",size=15),x=0),height=380,**PLOT_LAYOUT)
         st.plotly_chart(fig,use_container_width=True,config={"displayModeBar":False})
         st.markdown("</div>",unsafe_allow_html=True)
         df_wt = df_tahun.groupby(["wilayah","bulan_ke","bulan"],as_index=False).agg(stunting=("stunting","sum")).sort_values("bulan_ke")
         st.markdown("<div class='chart-container'>",unsafe_allow_html=True)
-        fig2 = px.line(df_wt,x="bulan",y="stunting",color="wilayah",markers=True,title="Tren per Wilayah " + str(tahun),labels={"bulan":"Bulan","stunting":"Kasus","wilayah":"Wilayah"})
+        fig2 = px.line(df_wt,x="bulan",y="stunting",color="wilayah",markers=True,title="Tren per Wilayah " + str(tahun))
         fig2.update_traces(line_width=2,marker_size=7)
         fig2.update_layout(height=420,**PLOT_LAYOUT)
         st.plotly_chart(fig2,use_container_width=True,config={"displayModeBar":False})
@@ -489,7 +567,7 @@ def page_analisis(df, tahun):
         st.plotly_chart(fig3,use_container_width=True,config={"displayModeBar":False})
         st.markdown("</div>",unsafe_allow_html=True)
         st.markdown("<div class='chart-container'>",unsafe_allow_html=True)
-        fig4 = go.Figure(go.Scatter(x=df_agg["bulan"],y=df_agg["pct_hadir"],mode="lines+markers",line=dict(color="#43A047",width=3),marker=dict(size=10,color="#43A047",line=dict(color="#FFFFFF",width=2)),fill="tozeroy",fillcolor="rgba(67,160,71,0.08)"))
+        fig4 = go.Figure(go.Scatter(x=df_agg["bulan"],y=df_agg["pct_hadir"],mode="lines+markers",line=dict(color="#43A047",width=3),marker=dict(size=10,color="#43A047")))
         fig4.add_hline(y=80,line_dash="dash",line_color="#FB8C00",annotation_text="Target 80%",annotation_font_color="#FB8C00")
         fig4.update_layout(title=dict(text="Cakupan Kehadiran (%)",font=dict(color="#1A237E",size=15),x=0),height=380,**PLOT_LAYOUT)
         st.plotly_chart(fig4,use_container_width=True,config={"displayModeBar":False})
@@ -550,8 +628,11 @@ def page_kelola_user():
                     st.error("Username sudah ada.")
                 else:
                     users = pd.concat([users, pd.DataFrame([{"username":nu,"password":hash_pw(np),"nama":nn,"role":nr,"wilayah":nw,"aktif":na}])], ignore_index=True)
-                    save_users(users)
-                    st.success(nn + " berhasil ditambahkan!")
+                    ok, msg = save_users(users)
+                    if ok:
+                        st.success(nn + " berhasil ditambahkan!")
+                    else:
+                        st.error("Gagal simpan: " + msg)
                     st.rerun()
 
 # ─── KELOLA DATA ───────────────────────────────────────────────────────────────
@@ -577,7 +658,10 @@ def page_kelola_data(df):
                         if st.form_submit_button("Update",type="primary"):
                             df.loc[i,["sasaran","hadir","stunting"]]=[ns,nh,nst]
                             df.loc[i,"waktu_input"]=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            save_data(df); st.success("Update berhasil!"); st.rerun()
+                            ok, msg = save_data(df)
+                            if ok: st.success("Update berhasil!")
+                            else: st.error("Gagal: " + msg)
+                            st.rerun()
     with tab2:
         if df.empty: st.info("Belum ada data.")
         else:
@@ -587,7 +671,10 @@ def page_kelola_data(df):
             with c3: pd_sel=st.selectbox("Posyandu",df[(df["tahun"]==td)&(df["bulan"]==bd)]["posyandu"].unique().tolist(),key="pd")
             if st.checkbox("Yakin hapus?") and st.button("Hapus",type="primary"):
                 df=df[~((df["tahun"]==td)&(df["bulan"]==bd)&(df["posyandu"]==pd_sel))].reset_index(drop=True)
-                save_data(df); st.success("Data berhasil dihapus!"); st.rerun()
+                ok, msg = save_data(df)
+                if ok: st.success("Data berhasil dihapus!")
+                else: st.error("Gagal: " + msg)
+                st.rerun()
     return df
 
 # ─── MAIN ──────────────────────────────────────────────────────────────────────
@@ -613,6 +700,8 @@ def main():
     elif menu=="Kelola Data":
         if role=="admin": df=page_kelola_data(df)
         else: st.error("Akses ditolak.")
+    elif menu=="Test Koneksi":
+        if role=="admin": page_test_koneksi()
 
 if __name__ == "__main__":
     main()
