@@ -812,7 +812,12 @@ def page_kelola_data(df, user):
         abox("<span class='role-badge rb-pegawai'>PEGAWAI</span> &nbsp;"
              f"Hanya dapat mengelola data yang diinput oleh <b>{user['username']}</b>.")
 
-    t1, t2 = st.tabs(["✏️ Edit Data","🗑️ Hapus Data"])
+    # Tab ke-3 hanya untuk admin
+    if role == "admin":
+        t1, t2, t3 = st.tabs(["✏️ Edit Data","🗑️ Hapus Data","🛠️ Hapus Paksa (Admin)"])
+    else:
+        t1, t2 = st.tabs(["✏️ Edit Data","🗑️ Hapus Data"])
+        t3 = None
 
     # ── TAB EDIT ──
     with t1:
@@ -938,6 +943,71 @@ def page_kelola_data(df, user):
                             st.session_state.hapus_konfirm = False
                             st.session_state.hapus_target  = None
                             st.rerun()
+
+    # ── TAB HAPUS PAKSA (ADMIN ONLY) ──
+    if role == "admin" and t3 is not None:
+        with t3:
+            abox("🛠️ <b>Mode Admin — Hapus Paksa</b><br>"
+                 "Gunakan ini untuk menghapus data yang tidak muncul di filter biasa "
+                 "(nama wilayah/posyandu tidak standar, data lama, dll).", "red")
+
+            load_data.clear()
+            df_all = load_data()
+            if df_all.empty:
+                abox("Tidak ada data sama sekali.", "warn")
+            else:
+                # Tampilkan semua data dengan nomor baris
+                df_display = df_all.reset_index(drop=True).copy()
+                df_display.insert(0, "No", range(1, len(df_display)+1))
+                sec(f"Semua Data ({len(df_display)} baris) — Pilih nomor baris yang ingin dihapus")
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+                st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
+                abox("Masukkan nomor baris (kolom <b>No</b>) yang ingin dihapus:", "warn")
+
+                c_inp, c_btn = st.columns([2,1])
+                with c_inp:
+                    no_hapus = st.number_input(
+                        "Nomor Baris", min_value=1, max_value=len(df_display),
+                        step=1, key="no_hapus_paksa")
+                with c_btn:
+                    st.markdown("<div style='margin-top:1.6rem;'></div>", unsafe_allow_html=True)
+                    preview_btn = st.button("🔍 Preview Baris", key="preview_hapus", use_container_width=True)
+
+                if preview_btn or st.session_state.get("hapus_paksa_preview"):
+                    st.session_state["hapus_paksa_preview"] = True
+                    idx_real = no_hapus - 1  # konversi ke 0-based
+                    if 0 <= idx_real < len(df_all):
+                        r = df_all.iloc[idx_real]
+                        abox(
+                            f"<b>Baris No. {no_hapus} yang akan dihapus:</b><br>"
+                            f"📍 Posyandu: <b>{r.get('posyandu','—')}</b><br>"
+                            f"🏘️ Wilayah: <b>{r.get('wilayah','—')}</b><br>"
+                            f"📅 Periode: <b>{r.get('bulan','—')} {r.get('tahun','—')}</b><br>"
+                            f"👥 Sasaran: <b>{r.get('sasaran','—')}</b> | "
+                            f"Hadir: <b>{r.get('hadir','—')}</b> | "
+                            f"Stunting: <b>{r.get('stunting','—')}</b><br>"
+                            f"🔑 Diinput oleh: <b>{r.get('diinput_oleh','—')}</b>",
+                            "red")
+
+                        cc, cd = st.columns(2)
+                        with cc:
+                            if st.button("🗑️ HAPUS BARIS INI SEKARANG",
+                                         type="primary", key="btn_hapus_paksa",
+                                         use_container_width=True):
+                                df_baru = df_all.drop(index=idx_real).reset_index(drop=True)
+                                ok, msg = save_data(df_baru)
+                                st.session_state["hapus_paksa_preview"] = False
+                                if ok:
+                                    st.success(f"✅ Baris No.{no_hapus} berhasil dihapus!")
+                                else:
+                                    st.error(f"❌ Gagal hapus: {msg}")
+                                st.rerun()
+                        with cd:
+                            if st.button("❌ Batal", key="btn_batal_paksa",
+                                         use_container_width=True):
+                                st.session_state["hapus_paksa_preview"] = False
+                                st.rerun()
 
     return df
 
