@@ -702,17 +702,20 @@ def page_input(df, user):
     wik = "Akses <b>semua wilayah</b>" if role=="admin" else f"Wilayah: <b>{wilayah}</b>"
     abox(f'<span class="role-badge {rb}">{role.upper()}</span> &nbsp;{user["nama"]} &nbsp;|&nbsp; {wik}')
 
-    with st.form("fi", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            ti = st.selectbox("Tahun *", TAHUN_LIST, index=2)
-            bi = st.selectbox("Bulan *", BULAN_LIST, index=datetime.now().month-1)
-            wi = st.selectbox("Kelurahan/Desa *", opts)
-        with c2:
-            pi  = st.selectbox("Posyandu *", WILAYAH.get(wi,[]))
-            sai = st.number_input("Total Sasaran (jumlah anak terdaftar) *", min_value=0, step=1)
-            hi  = st.number_input("Jumlah Kehadiran *", min_value=0, step=1)
-        sti = st.number_input("Jumlah Kasus Stunting *", min_value=0, step=1)
+    # Wilayah & Posyandu di LUAR form supaya posyandu update otomatis saat wilayah diganti
+    c1, c2 = st.columns(2)
+    with c1:
+        ti = st.selectbox("Tahun *", TAHUN_LIST, index=2, key="inp_tahun")
+        bi = st.selectbox("Bulan *", BULAN_LIST, index=datetime.now().month-1, key="inp_bulan")
+        wi = st.selectbox("Kelurahan/Desa *", opts, key="inp_wilayah")
+    with c2:
+        pi  = st.selectbox("Posyandu *", WILAYAH.get(wi,[]), key="inp_posyandu")
+        sai = st.number_input("Total Sasaran (jumlah anak terdaftar) *", min_value=0, step=1, key="inp_sasaran")
+        hi  = st.number_input("Jumlah Kehadiran *", min_value=0, step=1, key="inp_hadir")
+    sti = st.number_input("Jumlah Kasus Stunting *", min_value=0, step=1, key="inp_stunting")
+
+    with st.form("fi"):
+        st.markdown(f"**Konfirmasi Input:** {wi} → {pi} | {bi} {ti}")
         sub = st.form_submit_button("💾  SIMPAN DATA", use_container_width=True, type="primary")
 
     if sub:
