@@ -702,20 +702,17 @@ def page_input(df, user):
     wik = "Akses <b>semua wilayah</b>" if role=="admin" else f"Wilayah: <b>{wilayah}</b>"
     abox(f'<span class="role-badge {rb}">{role.upper()}</span> &nbsp;{user["nama"]} &nbsp;|&nbsp; {wik}')
 
-    # Wilayah & Posyandu di LUAR form supaya posyandu update otomatis saat wilayah diganti
-    c1, c2 = st.columns(2)
-    with c1:
-        ti = st.selectbox("Tahun *", TAHUN_LIST, index=2, key="inp_tahun")
-        bi = st.selectbox("Bulan *", BULAN_LIST, index=datetime.now().month-1, key="inp_bulan")
-        wi = st.selectbox("Kelurahan/Desa *", opts, key="inp_wilayah")
-    with c2:
-        pi  = st.selectbox("Posyandu *", WILAYAH.get(wi,[]), key="inp_posyandu")
-        sai = st.number_input("Total Sasaran (jumlah anak terdaftar) *", min_value=0, step=1, key="inp_sasaran")
-        hi  = st.number_input("Jumlah Kehadiran *", min_value=0, step=1, key="inp_hadir")
-    sti = st.number_input("Jumlah Kasus Stunting *", min_value=0, step=1, key="inp_stunting")
-
-    with st.form("fi"):
-        st.markdown(f"**Konfirmasi Input:** {wi} → {pi} | {bi} {ti}")
+    with st.form("fi", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            ti = st.selectbox("Tahun *", TAHUN_LIST, index=2)
+            bi = st.selectbox("Bulan *", BULAN_LIST, index=datetime.now().month-1)
+            wi = st.selectbox("Kelurahan/Desa *", opts)
+        with c2:
+            pi  = st.selectbox("Posyandu *", WILAYAH.get(wi,[]))
+            sai = st.number_input("Total Sasaran (jumlah anak terdaftar) *", min_value=0, step=1)
+            hi  = st.number_input("Jumlah Kehadiran *", min_value=0, step=1)
+        sti = st.number_input("Jumlah Kasus Stunting *", min_value=0, step=1)
         sub = st.form_submit_button("💾  SIMPAN DATA", use_container_width=True, type="primary")
 
     if sub:
@@ -770,15 +767,19 @@ def page_import(df):
             st.dataframe(di.head(10), use_container_width=True, hide_index=True)
             abox(f"📊 Total <b>{len(di)}</b> baris data siap diimport.")
             if st.button("✅ Konfirmasi Import", type="primary", use_container_width=True):
-                di["bulan_ke"]     = di["bulan"].apply(get_bulan_ke)
-                di["diinput_oleh"] = "import_csv"
-                di["waktu_input"]  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                df = pd.concat([df, di], ignore_index=True)\
-                       .drop_duplicates(subset=["tahun","bulan","posyandu"], keep="last")
-                ok, msg = save_data(df)
-                if ok: st.success(f"✅ {len(di)} data berhasil diimport!")
-                else:  st.error(f"❌ Gagal simpan: {msg}")
-                st.rerun()
+                with st.spinner("Menyimpan data ke Google Sheets..."):
+                    di["bulan_ke"]     = di["bulan"].apply(get_bulan_ke)
+                    di["diinput_oleh"] = "import_csv"
+                    di["waktu_input"]  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    df = pd.concat([df, di], ignore_index=True)\
+                           .drop_duplicates(subset=["tahun","bulan","posyandu"], keep="last")
+                    ok, msg = save_data(df)
+                if ok:
+                    st.success(f"✅ {len(di)} data berhasil diimport!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Gagal simpan: {msg}")
+                    st.info("💡 Cek halaman **Test Koneksi** untuk memeriksa koneksi Google Sheets.")
         except Exception as e:
             st.error(f"❌ Error membaca file: {e}")
     return df
