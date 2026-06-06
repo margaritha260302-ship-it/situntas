@@ -547,7 +547,7 @@ def render_sidebar(role="publik"):
                 unsafe_allow_html=True)
 
         if role == "publik":
-            menu = "📊 Dashboard"
+            menu = st.radio("Menu", ["📊 Dashboard","📈 Analisis & Tren"], label_visibility="collapsed")
             st.markdown('<div style="padding:.7rem 1.1rem;background:rgba(255,255,255,.1);'
                         'border-radius:12px;margin-bottom:.8rem;font-size:.79rem;font-weight:600;'
                         'border:1px solid rgba(255,255,255,.15);">'
@@ -1273,7 +1273,10 @@ def main():
 
     if st.session_state.is_public:
         menu, tahun, bulan = render_sidebar("publik")
-        page_dashboard(df, tahun, bulan, is_public=True)
+        if menu == "📈 Analisis & Tren":
+            page_analisis(df, tahun)
+        else:
+            page_dashboard(df, tahun, bulan, is_public=True)
         return
 
     if not st.session_state.logged_in:
