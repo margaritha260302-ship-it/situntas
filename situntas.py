@@ -126,14 +126,19 @@ def load_users():
 def save_users(df):
     load_users.clear()
     ws, err = get_ws("users")
-    if ws:
-        try:
-            ws.clear()
-            ws.update([df.columns.tolist()] + df.astype(str).values.tolist())
-            return True, "OK"
-        except Exception as e:
-            return False, str(e)
-    return False, str(err)
+    if ws is None:
+        return False, f"Tidak bisa konek ke Google Sheets: {err}"
+    try:
+        import time
+        rows = [df.columns.tolist()] + df.astype(str).values.tolist()
+        ws.clear(); time.sleep(0.5)
+        ws.update(rows); time.sleep(0.5)
+        after = ws.get_all_values()
+        if len(after) != len(df) + 1:
+            return False, f"Verifikasi gagal: {len(after)-1} baris terbaca, harusnya {len(df)}"
+        return True, "OK"
+    except Exception as e:
+        return False, str(e)
 
 def verify_user(username, password):
     users = load_users()
@@ -380,6 +385,36 @@ h1,h2,h3 { color: #1345A0 !important; }
     border-radius: 16px !important; overflow: hidden !important;
     box-shadow: 0 4px 20px rgba(21,101,192,0.09) !important;
     border: 1px solid rgba(219,234,254,0.8) !important;
+}
+
+/* ── Dropdown Options (fix teks putih di sidebar) ── */
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div,
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] span,
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] div {
+    color: #1E3A5F !important;
+    background: #fff !important;
+}
+[data-baseweb="popover"] ul li,
+[data-baseweb="popover"] [role="option"],
+[data-baseweb="menu"] ul li,
+[data-baseweb="menu"] [role="option"] {
+    color: #1E3A5F !important;
+    background: #fff !important;
+}
+[data-baseweb="popover"] [role="option"]:hover,
+[data-baseweb="menu"] [role="option"]:hover {
+    background: #EFF6FF !important;
+    color: #1345A0 !important;
+}
+[data-baseweb="popover"] [aria-selected="true"],
+[data-baseweb="menu"] [aria-selected="true"] {
+    background: #DBEAFE !important;
+    color: #1345A0 !important;
+    font-weight: 700 !important;
+}
+/* Input teks di selectbox sidebar tetap terbaca */
+[data-testid="stSidebar"] .stSelectbox input {
+    color: #1E3A5F !important;
 }
 
 /* ── Scrollbar ── */
@@ -922,11 +957,15 @@ def page_kelola_user():
                 else:
                     baru = {"username":nu,"password":hash_pw(np_),"nama":nn,
                             "role":nr,"wilayah":nw,"aktif":str(na).upper()}
-                    users = pd.concat([users, pd.DataFrame([baru])], ignore_index=True)
-                    ok, msg = save_users(users)
-                    if ok: st.success(f"✅ Pengguna {nn} berhasil ditambahkan!")
-                    else:  st.error(f"❌ Gagal simpan: {msg}")
-                    st.rerun()
+                    users_baru = pd.concat([users, pd.DataFrame([baru])], ignore_index=True)
+                    with st.spinner("Menyimpan pengguna..."):
+                        ok, msg = save_users(users_baru)
+                    if ok:
+                        st.success(f"✅ Pengguna {nn} berhasil ditambahkan!")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Gagal simpan ke Google Sheets: {msg}")
+                        st.info("💡 Cek tab **Test Koneksi** untuk memeriksa koneksi.")
 
     with t3:
         abox("Gunakan fitur ini untuk mereset password pengguna yang lupa password.")
