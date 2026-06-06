@@ -930,13 +930,18 @@ def page_laporan(df, tahun, bulan):
 # ─── KELOLA PENGGUNA ──────────────────────────────────────────────────────────────
 def page_kelola_user():
     render_header("Kelola Pengguna")
+    # Selalu load fresh dari Sheets, bukan cache
+    load_users.clear()
     users = load_users()
-    t1, t2, t3 = st.tabs(["👥 Daftar Pengguna","➕ Tambah Pengguna","🔑 Reset Password"])
+    t1, t2, t3, t4 = st.tabs(["👥 Daftar Pengguna","➕ Tambah Pengguna","🗑️ Hapus Pengguna","🔑 Reset Password"])
 
     with t1:
         sec(f"Total {len(users)} Pengguna Terdaftar")
         st.dataframe(users[["username","nama","role","wilayah","aktif"]],
                      use_container_width=True, hide_index=True)
+        if st.button("🔄 Refresh Data Pengguna", use_container_width=True):
+            load_users.clear()
+            st.rerun()
 
     with t2:
         with st.form("fu", clear_on_submit=True):
@@ -958,16 +963,52 @@ def page_kelola_user():
                     baru = {"username":nu,"password":hash_pw(np_),"nama":nn,
                             "role":nr,"wilayah":nw,"aktif":str(na).upper()}
                     users_baru = pd.concat([users, pd.DataFrame([baru])], ignore_index=True)
-                    with st.spinner("Menyimpan pengguna..."):
+                    with st.spinner("Menyimpan pengguna ke Google Sheets..."):
                         ok, msg = save_users(users_baru)
                     if ok:
-                        st.success(f"✅ Pengguna {nn} berhasil ditambahkan!")
+                        st.success(f"✅ Pengguna {nn} berhasil ditambahkan dan tersimpan!")
                         st.rerun()
                     else:
                         st.error(f"❌ Gagal simpan ke Google Sheets: {msg}")
                         st.info("💡 Cek tab **Test Koneksi** untuk memeriksa koneksi.")
 
     with t3:
+        abox("⚠️ Hapus pengguna dari sistem. <b>Akun admin tidak dapat dihapus.</b>", "warn")
+        non_admin = users[users["username"] != "admin"]["username"].tolist()
+        if not non_admin:
+            abox("Tidak ada pengguna yang dapat dihapus.", "info")
+        else:
+            pilih_hapus = st.selectbox("Pilih Pengguna yang akan Dihapus", non_admin, key="sel_hapus_user")
+            row_hapus = users[users["username"]==pilih_hapus].iloc[0]
+            abox(f"<b>Username:</b> {row_hapus['username']}<br>"
+                 f"<b>Nama:</b> {row_hapus['nama']}<br>"
+                 f"<b>Role:</b> {row_hapus['role']} &nbsp;|&nbsp; <b>Wilayah:</b> {row_hapus['wilayah']}", "warn")
+
+            konfirm_key = f"konfirm_hapus_user_{pilih_hapus}"
+            if not st.session_state.get(konfirm_key):
+                if st.button(f"🗑️ Hapus '{pilih_hapus}'", type="primary", use_container_width=True, key="btn_hapus_user"):
+                    st.session_state[konfirm_key] = True
+                    st.rerun()
+            else:
+                abox(f"⚠️ <b>Yakin hapus pengguna '{pilih_hapus}'?</b> Tindakan ini permanen!", "red")
+                cc, cd = st.columns(2)
+                with cc:
+                    if st.button("✅ Ya, Hapus", type="primary", use_container_width=True, key="btn_konfirm_hapus_user"):
+                        users_baru = users[users["username"] != pilih_hapus].reset_index(drop=True)
+                        with st.spinner("Menghapus pengguna..."):
+                            ok, msg = save_users(users_baru)
+                        st.session_state[konfirm_key] = False
+                        if ok:
+                            st.success(f"✅ Pengguna '{pilih_hapus}' berhasil dihapus!")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Gagal hapus: {msg}")
+                with cd:
+                    if st.button("❌ Batal", use_container_width=True, key="btn_batal_hapus_user"):
+                        st.session_state[konfirm_key] = False
+                        st.rerun()
+
+    with t4:
         abox("Gunakan fitur ini untuk mereset password pengguna yang lupa password.")
         with st.form("freset", clear_on_submit=True):
             pilih   = st.selectbox("Pilih Pengguna *", users["username"].tolist())
@@ -978,7 +1019,8 @@ def page_kelola_user():
                 else:
                     idx = users[users["username"]==pilih].index[0]
                     users.loc[idx,"password"] = hash_pw(pw_baru)
-                    ok, msg = save_users(users)
+                    with st.spinner("Menyimpan..."):
+                        ok, msg = save_users(users)
                     if ok: st.success(f"✅ Password {pilih} berhasil direset!")
                     else:  st.error(f"❌ Gagal: {msg}")
                     st.rerun()
